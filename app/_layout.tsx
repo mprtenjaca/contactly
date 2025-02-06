@@ -1,39 +1,104 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { Stack } from "expo-router";
+import { ThemeProvider } from '../context/ThemeContext';
+import { AuthProvider } from '../context/AuthContext';
+import * as Notifications from 'expo-notifications';
+import { initializeNotifications } from '../services/NotificationService';
+import { initDatabase } from '../services/DatabaseService';
+import { SQLiteProvider } from 'expo-sqlite';
+import { View, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import ProfileScreen from '../components/screens/ProfileScreen';
+import { configureGoogleSignIn } from '../services/GoogleAuthService';
+import { restoreSession } from '../services/AuthService';
+import { offlineManager } from '../services/OfflineManager';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const router = useRouter();
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    initializeNotifications();
+    // initDatabase().catch(error => {
+    //   console.error('Failed to initialize database:', error);
+    // });
 
-  if (!loaded) {
-    return null;
-  }
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const phoneNumber = response.notification.request.content.data?.phoneNumber;
+      if (phoneNumber) {
+        // You could add functionality to directly call the number here
+        console.log('Notification tapped, phone number:', phoneNumber);
+      }
+    });
+
+    // Set up notification response handling
+    const responseListener = Notifications.addNotificationResponseReceivedListener(
+      response => {
+        const data = response.notification.request.content.data;
+        if (data.contactId) {
+          // Navigate to contact details
+          router.push({
+            pathname: `/contact/${data.contactId}`,
+            params: { 
+              contact: JSON.stringify({
+                id: data.contactId,
+                // Add other required contact data
+              })
+            }
+          });
+        }
+      }
+    );
+
+    configureGoogleSignIn();
+
+    // Initialize offline support
+    restoreSession().catch(console.error);
+
+    return () => {
+      subscription.remove();
+      responseListener.remove();
+    };
+  }, [router]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <SQLiteProvider databaseName="contactly.db" onInit={async () => {
+          try {
+            await initDatabase();
+          } catch (error) {
+            console.error('Failed to initialize database:', error);
+          }
+        }}>
+          <Stack screenOptions={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen 
+              name="(auth)" 
+              options={{ 
+                animation: 'slide_from_right',
+              }} 
+            />
+            <Stack.Screen 
+              name="(tabs)" 
+              options={{ 
+                animation: 'slide_from_right',
+              }} 
+            />
+          </Stack>
+        </SQLiteProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

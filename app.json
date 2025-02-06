@@ -1,41 +1,79 @@
 {
   "expo": {
     "name": "Contactly",
-    "slug": "Contactly",
+    "slug": "contactly",
     "version": "1.0.0",
+    "icon": "./assets/icon.png",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSContactsUsageDescription": "This app requires access to contacts to display and manage your contact list.",
+        "NSContactsWriteOnlyPermission": "This app needs to write to your contacts.",
+        "NSContactsPermission": "This app needs access to contacts.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to detect incoming calls",
+        "NSCallKitEnabled": true,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "googleServicesFile": "./GoogleService-Info.plist"
+      },
+      "bundleIdentifier": "com.mpcode.contactly",
+      "icon": "./assets/ios-icon.png",
+      "customBuildFlags": ["-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_ENABLE_SNAPSHOT=1"]
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "READ_CONTACTS",
+        "WRITE_CONTACTS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "package": "com.mpcode.contactly"
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
+    "web": {},
     "plugins": [
-      "expo-router",
       [
-        "expo-splash-screen",
+        "expo-notifications",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ],
+          "mode": "production"
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": true,
+          "useSQLCipher": true,
+          "android": {
+            "enableFTS": false,
+            "useSQLCipher": false
+          }
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    "owner": "mprtenja",
+    "extra": {
+      "eas": {
+        "projectId": "83e27bfc-cb91-4b26-b0af-955112c1b062"
+      }
+    },
+    "scheme": "contactly"
   }
 }
