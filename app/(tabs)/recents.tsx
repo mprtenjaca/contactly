@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityType } from '../../components/ActivityModal';
 import { getPastActivities } from '../../services/DatabaseService';
 import { getCurrentUser } from '../../services/AuthService';
-
+import EmptyState from '../../components/EmptyState';
 interface Activity {
   id: string;
   type: ActivityType;
@@ -216,17 +216,27 @@ export default function RecentsTab() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.header, { color: colors.text }]}>Recent Activities</Text>
-      <SectionList
-        sections={sections}
-        keyExtractor={item => item.id}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
-            {title}
-          </Text>
-        )}
-        renderItem={renderItem}
+      {pastActivities.length === 0 ? (
+        <EmptyState 
+        icon="time-outline"
+        title="No Recent Activities"
+        message="Your recent activities with contacts will appear here"
       />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={item => item.id}
+          renderSectionHeader={({ section: { title } }) => (
+            <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
+              {title}
+            </Text>
+          )}
+          renderItem={renderItem}
+        />
+      )}
+      
     </SafeAreaView>
+    
   );
 }
 

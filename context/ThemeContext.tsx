@@ -1,66 +1,58 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { lightColors, darkColors } from '../constants/Colors';
 
 type Theme = 'light' | 'dark';
 
-interface ThemeContextType {
-  theme: Theme;
-  toggleTheme: () => void;
-  colors: typeof themes.light;
-}
+export const ThemeContext = createContext({
+  theme: 'light' as Theme,
+  colors: lightColors,
+  toggleTheme: () => {},
+});
 
-const themes = {
-  light: {
-    background: '#fff',
-    text: '#000',
-    secondaryText: '#8e8e93',
-    searchBar: '#e4e4ea',
-    separator: '#c6c6c8',
-    categoryBg: '#f2f2f7',
-    categoryBorder: '#e5e5ea',
-    selectedCategory: '#007AFF',
-    avatarBg: '#e5e5ea',
-    sectionHeader: '#f2f2f7',
-    tabBar: '#fff',
-    hoveredItem: '#f2f2f7',
-  },
-  dark: {
-    background: '#000',
-    text: '#fff',
-    secondaryText: '#8e8e93',
-    searchBar: '#1c1c1e',
-    separator: '#2c2c2e',
-    categoryBg: '#1c1c1e',
-    categoryBorder: '#333',
-    selectedCategory: '#007AFF',
-    avatarBg: '#2c2c2e',
-    sectionHeader: '#000',
-    tabBar: '#000',
-    hoveredItem: '#1c1c1e',
-  },
-};
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const THEME_STORAGE_KEY = 'user_theme_preference';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const deviceTheme = useColorScheme();
   const [theme, setTheme] = useState<Theme>('light');
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  useEffect(() => {
+    loadThemePreference();
+  }, []);
+
+  const loadThemePreference = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+      if (savedTheme) {
+        setTheme(savedTheme as Theme);
+      } else {
+        // Use light theme as default
+        setTheme('light');
+      }
+    } catch (error) {
+      console.error('Error loading theme preference:', error);
+      setTheme('light');
+    }
   };
 
-  const colors = themes[theme];
+  const toggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    try {
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    } catch (error) {
+      console.error('Error saving theme preference:', error);
+    }
+  };
+
+  const colors = theme === 'light' ? lightColors : darkColors;
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, colors }}>
+    <ThemeContext.Provider value={{ theme, colors, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-} 
+export const useTheme = () => useContext(ThemeContext); 

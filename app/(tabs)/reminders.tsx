@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { ActivityType } from '../../components/ActivityModal';
 import { getFutureActivities } from '../../services/DatabaseService';
 import { getCurrentUser } from '../../services/AuthService';
+import EmptyState from '../../components/EmptyState';
 
 interface Activity {
   id: string;
@@ -164,16 +165,25 @@ export default function RemindersTab() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.header, { color: colors.text }]}>Upcoming Activities</Text>
-      <SectionList
-        sections={sections}
-        keyExtractor={item => item.id}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
-            {title}
-          </Text>
-        )}
-        renderItem={renderItem}
+      
+      {futureActivities.length === 0 ? (
+        <EmptyState 
+        icon="time-outline"
+        title="No Upcoming Activities"
+        message="Your upcoming activities will appear here"
       />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={item => item.id}
+          renderSectionHeader={({ section: { title } }) => (
+            <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
+              {title}
+            </Text>
+          )}
+          renderItem={renderItem}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -204,7 +214,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     textTransform: 'uppercase',
     paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    // backgroundColor: 'rgba(255, 255, 255, 0.05)',
     letterSpacing: 0.3,
     fontWeight: '600',
   },

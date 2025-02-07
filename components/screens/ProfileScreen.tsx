@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,17 +16,20 @@ import { supabase } from '../../services/AuthService';
 import { offlineManager } from '../../services/OfflineManager';
 import EditProfileModal from '../EditProfileModal';
 import { getLocalUser, saveUserToLocal } from '../../services/DatabaseService';
+import * as SecureStore from 'expo-secure-store';
 
 export default function ProfileScreen() {
   const { colors, theme } = useTheme();
   const router = useRouter();
   const [user, setUser] = useState<{
+    id: string;
     email: string;
     firstName?: string;
     lastName?: string;
   } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadUserProfile();
@@ -35,43 +39,56 @@ export default function ProfileScreen() {
 
   const loadUserProfile = async () => {
     try {
+      setIsLoading(true);
+      // First try to get from local storage
       const currentUser = await getCurrentUser();
-      if (currentUser) {
-        // Try to get from local SQLite first
-        const localUser = await getLocalUser(currentUser.id);
-        if (localUser) {
-          setUser(localUser);
-        }
 
-        // Then try to update from Supabase if online
+      if (currentUser?.id) {
+        // Always set user from local storage first
+        setUser(currentUser);
+
+        // Then fetch latest from Supabase if online
         if (offlineManager.getIsOnline()) {
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', currentUser.id)
             .single();
 
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            return;
+          }
+
           if (profileData) {
             const updatedUser = {
-              ...currentUser,
-              firstName: profileData.first_name,
-              lastName: profileData.last_name,
+              id: currentUser.id,
+              email: currentUser.email,
+              firstName: profileData.first_name || currentUser.firstName,
+              lastName: profileData.last_name || currentUser.lastName,
             };
             setUser(updatedUser);
+            // Update local storage with latest data
             await saveUserToLocal(updatedUser);
           }
         }
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      Alert.alert('Error', 'Failed to load profile');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogout = () => {
+    console.log('Handling logout...');
+
     Alert.alert(
       "Logout",
       "Are you sure you want to logout?",
       [
+
         {
           text: "Cancel",
           style: "cancel"
@@ -81,7 +98,9 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              console.log('Signing out...');
               await signOut();
+              
               router.replace('/sign-in');
             } catch (error) {
               console.error('Error signing out:', error);
@@ -95,55 +114,76 @@ export default function ProfileScreen() {
 
   const handleUpdateProfile = async (firstName: string, lastName: string) => {
     try {
+      console.log('Starting profile update...', { firstName, lastName });
+      
       const currentUser = await getCurrentUser();
       if (!currentUser?.id) {
-        Alert.alert('Error', 'Unable to update profile. Please try again.');
-        return;
+        throw new Error('No authenticated user found');
       }
 
-      const updateData = {
-        userId: currentUser.id,
+      const updatedUser = {
+        id: currentUser.id,
+        email: currentUser.email,
         firstName,
         lastName,
       };
 
       if (offlineManager.getIsOnline()) {
-        // Online update
-        const { error } = await supabase
+        console.log('Online mode - updating Supabase...');
+
+        // Update auth metadata
+        const { error: authError } = await supabase.auth.updateUser({
+          data: { 
+            first_name: firstName,
+            last_name: lastName,
+          }
+        });
+
+        if (authError) {
+          console.error('Auth update error:', authError);
+          throw authError;
+        }
+
+        // Update profile
+        const { error: profileError } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: currentUser.id,
             first_name: firstName,
             last_name: lastName,
             updated_at: new Date().toISOString(),
-          })
-          .eq('id', currentUser.id);
+          });
 
-        if (error) throw error;
+        if (profileError) {
+          console.error('Profile update error:', profileError);
+          throw profileError;
+        }
+
+        console.log('Supabase update successful');
       } else {
-        // Offline update - queue for later
-        await offlineManager.addPendingSync('UPDATE_PROFILE', updateData);
-      }
-
-      // Update local state immediately
-      setUser(prev => prev ? {
-        ...prev,
-        firstName,
-        lastName,
-      } : null);
-
-      // Update local storage
-      if (currentUser.id) {
-        await saveUserToLocal({
-          id: currentUser.id,
-          email: currentUser.email,
+        console.log('Offline mode - queueing update...');
+        await offlineManager.addPendingSync('UPDATE_PROFILE', {
+          userId: currentUser.id,
           firstName,
           lastName,
         });
+        console.log('Update queued for sync');
       }
+
+      // Update local state
+      console.log('Updating local state...', updatedUser);
+      setUser(updatedUser);
+
+      // Update local storage
+      await saveUserToLocal(updatedUser);
+      console.log('Local storage updated');
+
+      setShowEditModal(false);
+      Alert.alert('Success', 'Profile updated successfully');
 
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
   };
 
@@ -257,6 +297,14 @@ export default function ProfileScreen() {
     },
   });
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.selectedCategory} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -299,7 +347,10 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={handleLogout}
+        >
           <Ionicons name="log-out-outline" size={24} color="#fff" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>

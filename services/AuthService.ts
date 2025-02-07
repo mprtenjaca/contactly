@@ -120,10 +120,16 @@ export const signIn = async (email: string, password: string) => {
 
 export const signOut = async () => {
   try {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    // First clear all storage
     await SecureStore.deleteItemAsync(SESSION_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
+    await AsyncStorage.removeItem('supabase.auth.token');
+    
+    // Then sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    console.log('Successfully signed out');
   } catch (error) {
     console.error('Error signing out:', error);
     throw error;
@@ -159,7 +165,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
 
       // Store for offline access
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(userInfo));
-      return userInfo;
+      return userInfo as User;
     }
     return null;
   } catch (error) {

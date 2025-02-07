@@ -8,6 +8,9 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
@@ -31,6 +34,7 @@ export default function EditProfileModal({
   const { colors } = useTheme();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -40,13 +44,22 @@ export default function EditProfileModal({
     }
   }, [visible, initialFirstName, initialLastName]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!firstName.trim() || !lastName.trim()) {
       Alert.alert('Error', 'Please fill in both first and last name');
       return;
     }
-    onSave(firstName.trim(), lastName.trim());
-    onClose();
+
+    try {
+      setIsLoading(true);
+      await onSave(firstName.trim(), lastName.trim());
+      // Success is handled by the parent component
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      Alert.alert('Error', 'Failed to save changes. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const styles = StyleSheet.create({
@@ -58,15 +71,15 @@ export default function EditProfileModal({
     },
     modalContent: {
       width: width - 40,
-      backgroundColor: colors.background,
+      backgroundColor: colors.theme === 'dark' ? colors.categoryBg : colors.background,
       borderRadius: 16,
       padding: 24,
-      shadowColor: "#000",
+      shadowColor: colors.theme === 'dark' ? '#fff' : 'gray',
       shadowOffset: {
         width: 0,
         height: 4,
       },
-      shadowOpacity: 0.25,
+      shadowOpacity: 0.15,
       shadowRadius: 8,
       elevation: 5,
     },
@@ -94,13 +107,30 @@ export default function EditProfileModal({
       gap: 12,
       marginTop: 16,
     },
-    button: {
+    cancelButton: {
       flex: 1,
       paddingVertical: 14,
       paddingHorizontal: 16,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: colors.theme === 'dark' ? 'rgba(255,59,48,0.2)' : 'rgba(255,59,48,0.1)',
+      borderWidth: 1,
+      borderColor: colors.theme === 'dark' ? '#fff' : colors.error,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.theme === 'dark' ? '#fff' : colors.error,
+    },
+    saveButton: {
+      flex: 1,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.selectedCategory,
     },
     buttonText: {
       fontSize: 16,
@@ -115,7 +145,10 @@ export default function EditProfileModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
         <View style={styles.modalContent}>
           <Text style={styles.title}>Edit Profile</Text>
           
@@ -126,6 +159,7 @@ export default function EditProfileModal({
             value={firstName}
             onChangeText={setFirstName}
             autoCapitalize="words"
+            editable={!isLoading}
           />
           
           <TextInput
@@ -135,29 +169,39 @@ export default function EditProfileModal({
             value={lastName}
             onChangeText={setLastName}
             autoCapitalize="words"
+            editable={!isLoading}
           />
           
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[styles.button]}
+              style={styles.cancelButton}
               onPress={onClose}
+              disabled={isLoading}
             >
-              <Text style={[styles.buttonText, { color: colors.error }]}>
+              <Text style={styles.cancelButtonText}>
                 Cancel
               </Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.selectedCategory }]}
+              style={[
+                styles.saveButton,
+                isLoading && { opacity: 0.7 }
+              ]}
               onPress={handleSave}
+              disabled={isLoading}
             >
-              <Text style={[styles.buttonText, { color: '#fff' }]}>
-                Save
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={[styles.buttonText, { color: '#fff' }]}>
+                  Save
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 } 

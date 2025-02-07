@@ -198,6 +198,28 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
     </TouchableOpacity>
   );
 
+  const EmptyState = () => {
+    const { colors } = useTheme();
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={[styles.emptyIconContainer, { backgroundColor: colors.categoryBg }]}>
+          <Ionicons 
+            name="calendar-outline" 
+            size={40} 
+            color={colors.selectedCategory} 
+          />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          No Activities Yet
+        </Text>
+        <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
+          Start by adding your first activity using the button above
+        </Text>
+      </View>
+    );
+  };
+
   // Move static styles outside
   const styles = StyleSheet.create({
     container: {
@@ -298,6 +320,33 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
       lineHeight: 20,
       opacity: 0.9,
     },
+    emptyContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      paddingVertical: 40,
+    },
+    emptyIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    emptyText: {
+      fontSize: 16,
+      textAlign: 'center',
+      lineHeight: 22,
+      opacity: 0.7,
+    },
   });
 
   // Add dynamic styles inside component
@@ -327,20 +376,27 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
       {isEmbedded ? (
         <ScrollView 
           style={styles.scrollContent}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ 
+            flexGrow: 1,
+            paddingBottom: 20 
+          }}
           showsVerticalScrollIndicator={false}
           bounces={true}
         >
-          {groupActivitiesByDate(activities).map((section) => (
-            <View key={section.date}>
-              <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
-                <Text style={[styles.sectionHeaderText, { color: colors.secondaryText }]}>
-                  {section.date}
-                </Text>
+          {activities.length > 0 ? (
+            groupActivitiesByDate(activities).map((section) => (
+              <View key={section.date}>
+                <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.sectionHeaderText, { color: colors.secondaryText }]}>
+                    {section.date}
+                  </Text>
+                </View>
+                {section.data.map(renderActivityItem)}
               </View>
-              {section.data.map(renderActivityItem)}
-            </View>
-          ))}
+            ))
+          ) : (
+            <EmptyState />
+          )}
         </ScrollView>
       ) : (
         <FlatList
@@ -356,8 +412,12 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
               {section.data.map(renderActivityItem)}
             </View>
           )}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ 
+            flexGrow: 1,
+            paddingBottom: 20 
+          }}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={EmptyState}
         />
       )}
     </View>

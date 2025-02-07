@@ -2,9 +2,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../services/AuthService';
 import { Session } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
-import { saveUserToLocal, getLocalUser } from '../services/DatabaseService';
+import { saveUserToLocal } from '../services/DatabaseService';
 import LoadingScreen from '../components/LoadingScreen';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { offlineManager } from '../services/OfflineManager';
 
 export const AuthContext = createContext<{
   session: Session | null;
@@ -19,57 +19,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Try to restore session from SecureStore
-    const restoreSessionFromStorage = async () => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
       try {
-        const sessionStr = await SecureStore.getItemAsync('supabase.session');
-        if (sessionStr) {
-          const savedSession = JSON.parse(sessionStr);
-          setSession(savedSession);
+        console.log('Initializing auth...');
+        
+        // Get current session from Supabase
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        console.log("Current Supabase session:", currentSession);
+
+        if (error) {
+          console.error('Error getting Supabase session:', error);
+          throw error;
+        }
+
+        if (currentSession) {
+          console.log('Got current session from Supabase');
+          if (isMounted) {
+            setSession(currentSession);
+            // Store session for offline use
+            await SecureStore.setItemAsync('supabase.session', JSON.stringify(currentSession));
+          }
+        } else {
+          console.log('No current session');
+          if (isMounted) {
+            setSession(null);
+          }
         }
       } catch (error) {
-        console.error('Error restoring session:', error);
+        console.error('Error in auth initialization:', error);
+        // Clear any invalid session
+        await SecureStore.deleteItemAsync('supabase.session');
+        if (isMounted) {
+          setSession(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    // Listen for auth changes
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        setSession(currentSession);
+        console.log('Auth state changed:', event);
+        
         if (currentSession) {
-          // Save session to SecureStore
-          await SecureStore.setItemAsync(
-            'supabase.session',
-            JSON.stringify(currentSession)
-          );
-          
-          // Save user data to local SQLite
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentSession.user.id)
-            .single();
-            
-          if (profileData) {
-            await saveUserToLocal({
-              id: currentSession.user.id,
-              email: currentSession.user.email || '',
-              firstName: profileData.first_name,
-              lastName: profileData.last_name,
-            });
-          }
+          console.log('New session available');
+          setSession(currentSession);
+          await SecureStore.setItemAsync('supabase.session', JSON.stringify(currentSession));
+        } else {
+          console.log('Session cleared');
+          setSession(null);
+          await SecureStore.deleteItemAsync('supabase.session');
         }
       }
     );
 
-    restoreSessionFromStorage();
+    // Initialize auth
+    initializeAuth();
 
+    // Cleanup
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
+
+  // Add debug logging
+  useEffect(() => {
+    console.log('Auth state updated:', { session, isLoading });
+  }, [session, isLoading]);
 
   if (isLoading) {
     return <LoadingScreen />;
