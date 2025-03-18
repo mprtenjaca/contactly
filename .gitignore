@@ -2,6 +2,13 @@
 
 # dependencies
 node_modules/
+yarn.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # Expo
 .expo/
@@ -35,7 +42,18 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Build outputs
+build/
+dist/
+*.bundle.js
+
+# Testing
+coverage/
+.nyc_output/
+
 app-example
 
 # Environment variables
 .env
+.env.*
+!.env.example

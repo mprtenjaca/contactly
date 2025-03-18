@@ -40,6 +40,7 @@ export interface Contact {
   phoneNumbers?: Array<{ number: string; }>;
   category?: string;
   notes?: string;
+  email?: string;
 }
 
 export interface User {
@@ -88,9 +89,19 @@ export const initDatabase = async () => {
         phoneNumber TEXT,
         category TEXT DEFAULT '',
         notes TEXT DEFAULT '',
+        email TEXT DEFAULT '',
         PRIMARY KEY (id, user_id)
       );
     `);
+
+    // Add email column if it doesn't exist (safe migration)
+    // try {
+    //   await database.execAsync("ALTER TABLE contacts ADD COLUMN email TEXT DEFAULT '';");
+    // } catch (error) {
+    //   // Column might already exist, which will cause an error
+    //   // We can safely ignore this error
+    //   console.log('Email column might already exist:', error);
+    // }
 
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS activities (
@@ -104,6 +115,42 @@ export const initDatabase = async () => {
         FOREIGN KEY (contactId, user_id) REFERENCES contacts (id, user_id)
       );
     `);
+
+    // Categories table with default categories
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        FOREIGN KEY (userId) REFERENCES users (id)
+      );
+    `);
+
+    // Add default categories if they don't exist
+    const defaultCategories = [
+      { name: 'Family', color: '#FF6B6B' },
+      { name: 'Work', color: '#4ECDC4' },
+      { name: 'Friends', color: '#45B7D1' },
+      { name: 'Clients', color: '#96CEB4' }
+    ];
+
+    // Insert default categories for each user
+    const users = await database.getAllAsync('SELECT id FROM users');
+    if (users && Array.isArray(users)) {
+      for (const user of users) {
+        const now = Date.now();
+        for (const category of defaultCategories) {
+          const categoryId = `cat_default_${category.name.toLowerCase()}`;
+          await database.runAsync(`
+            INSERT OR IGNORE INTO categories (id, name, color, userId, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, [categoryId, category.name, category.color, user.id, now, now]);
+        }
+      }
+    }
 
     console.log('Tables created successfully');
   } catch (error) {
@@ -119,15 +166,16 @@ export const saveContact = async (contact: Contact, userId: string) => {
     // Use runAsync instead of withTransactionAsync for single operations
     await database.runAsync(
       `INSERT OR REPLACE INTO contacts 
-       (id, user_id, name, phoneNumber, category, notes) 
-       VALUES (?, ?, ?, ?, ?, ?);`,
+       (id, user_id, name, phoneNumber, category, notes, email) 
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
       [
         contact.id,
         userId,
         contact.name || '',
         contact.phoneNumbers?.[0]?.number || '',
         contact.category || '',
-        contact.notes || ''
+        contact.notes || '',
+        contact.email || ''
       ]
     );
 
@@ -141,8 +189,14 @@ export const saveContact = async (contact: Contact, userId: string) => {
 export const getContact = async (id: string, userId: string): Promise<Contact | null> => {
   try {
     const database = await getDb();
+    
+    // First check if email column exists
+    const tableInfo = await database.getAllAsync("PRAGMA table_info(contacts);");
+    const hasEmailColumn = tableInfo.some((col: any) => col.name === 'email');
+    
     const result = await database.getFirstAsync(
-      'SELECT * FROM contacts WHERE id = ? AND user_id = ? LIMIT 1;',
+      `SELECT id, name, phoneNumber, category, notes${hasEmailColumn ? ', email' : ', "" as email'}
+       FROM contacts WHERE id = ? AND user_id = ? LIMIT 1;`,
       [id, userId]
     );
     
@@ -154,6 +208,7 @@ export const getContact = async (id: string, userId: string): Promise<Contact | 
         phoneNumbers: result.phoneNumber ? [{ number: result.phoneNumber }] : [],
         category: result.category || '',
         notes: result.notes || '',
+        email: result.email || ''
       };
     }
     console.log('No contact found with id:', id);
@@ -293,13 +348,17 @@ export const getAllContacts = async (userId: string): Promise<Contact[]> => {
     const database = await getDb();
     console.log('Getting all contacts for user:', userId);
     
+    // First check if email column exists
+    const tableInfo = await database.getAllAsync("PRAGMA table_info(contacts);");
+    const hasEmailColumn = tableInfo.some((col: any) => col.name === 'email');
+    
     const result = await database.getAllAsync(`
       SELECT 
         id,
         name,
         phoneNumber,
         category,
-        notes
+        notes${hasEmailColumn ? ', email' : ', "" as email'}
       FROM contacts 
       WHERE user_id = ?
       ORDER BY name;
@@ -314,6 +373,7 @@ export const getAllContacts = async (userId: string): Promise<Contact[]> => {
         phoneNumbers: contact.phoneNumber ? [{ number: contact.phoneNumber }] : [],
         category: contact.category || '',
         notes: contact.notes || '',
+        email: contact.email || ''
       }));
     }
     
@@ -358,16 +418,17 @@ export const importContacts = async (deviceContacts: Contact[], userId: string) 
 
         await database.runAsync(
           `INSERT OR REPLACE INTO contacts 
-          (id, user_id, name, phoneNumber, category, notes) 
+          (id, user_id, name, phoneNumber, category, notes, email) 
           VALUES 
-          (?, ?, ?, ?, ?, ?);`,
+          (?, ?, ?, ?, ?, ?, ?);`,
           [
             contact.id,
             userId,
             contact.name || '',
             contact.phoneNumbers?.[0]?.number || '',
             contact.category || '',
-            contact.notes || ''
+            contact.notes || '',
+            contact.email || ''
           ]
         );
 
@@ -438,6 +499,31 @@ export const saveUserToLocal = async (user: User) => {
      VALUES (?, ?, ?, ?);`,
     [user.id, user.email, user.firstName, user.lastName]
   );
+
+  // Check if user already has categories
+  const existingCategories = await database.getAllAsync(
+    'SELECT id FROM categories WHERE userId = ?',
+    [user.id]
+  );
+
+  // Only create default categories if user has none
+  if (!existingCategories || existingCategories.length === 0) {
+    const defaultCategories = [
+      { name: 'Family', color: '#FF6B6B' },
+      { name: 'Work', color: '#4ECDC4' },
+      { name: 'Friends', color: '#45B7D1' },
+      { name: 'Clients', color: '#96CEB4' }
+    ];
+
+    const now = Date.now();
+    for (const category of defaultCategories) {
+      const categoryId = `cat_default_${category.name.toLowerCase()}`;
+      await database.runAsync(`
+        INSERT OR IGNORE INTO categories (id, name, color, userId, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [categoryId, category.name, category.color, user.id, now, now]);
+    }
+  }
 };
 
 export const getLocalUser = async (userId: string): Promise<User | null> => {
@@ -456,4 +542,86 @@ export const getLocalUser = async (userId: string): Promise<User | null> => {
     };
   }
   return null;
+};
+
+// Add these new functions for category management
+export const createCategory = async (
+  name: string,
+  color: string,
+  userId: string
+) => {
+  const db = await getDb();
+  const now = Date.now();
+  
+  // Generate a timestamp-based ID similar to other parts of the app
+  const id = `cat_${now}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await db.runAsync(
+    `INSERT INTO categories (id, name, color, userId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, name, color, userId, now, now]
+  );
+
+  return { id, name, color };
+};
+
+export const getAllCategories = async (userId: string) => {
+  const db = await getDb();
+
+  const result = await db.getAllAsync(
+    'SELECT id, name, color FROM categories WHERE userId = ? ORDER BY createdAt DESC',
+    [userId]
+  );
+
+  if (result && Array.isArray(result)) {
+    return result.map((category: any) => ({
+      id: category.id,
+      name: category.name,
+      color: category.color
+    }));
+  }
+  return [];
+};
+
+export const deleteCategory = async (categoryId: string, userId: string) => {
+  const db = await getDb();
+  
+  // First update any contacts that use this category to have no category
+  await db.runAsync(
+    'UPDATE contacts SET category = "" WHERE category = ? AND user_id = ?',
+    [categoryId, userId]
+  );
+
+  // Then delete the category
+  await db.runAsync(
+    'DELETE FROM categories WHERE id = ? AND userId = ?',
+    [categoryId, userId]
+  );
+};
+
+export const updateContact = async (contact: {
+  id: string;
+  name: string;
+  phoneNumbers: Array<{ number: string }>;
+  email?: string;
+  notes?: string;
+  category?: string;
+  userId: string;
+}) => {
+  try {
+    const db = await getDb();
+    const { id, name, phoneNumbers, email, notes, category, userId } = contact;
+
+    await db.runAsync(
+      `UPDATE contacts 
+       SET name = ?, phoneNumber = ?, email = ?, notes = ?, category = ? 
+       WHERE id = ? AND user_id = ?`,
+      [name, JSON.stringify(phoneNumbers), email || null, notes || null, category || null, id, userId]
+    );
+
+    return { ...contact };
+  } catch (error) {
+    console.error('Error updating contact:', error);
+    throw error;
+  }
 };

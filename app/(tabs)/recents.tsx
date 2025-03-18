@@ -1,27 +1,29 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityType } from '../../components/ActivityModal';
-import { getPastActivities } from '../../services/DatabaseService';
+import { getPastActivities, deleteActivity } from '../../services/DatabaseService';
 import { getCurrentUser } from '../../services/AuthService';
 import EmptyState from '../../components/EmptyState';
-interface Activity {
-  id: string;
-  type: ActivityType;
-  date: Date;
-  notes?: string;
-  contactId: string;
-  contactName: string;
-}
-
+import ActivityModal from '../../components/ActivityModal';
+import { handleSaveActivity } from '../../services/ActivityService';
+import { Activity } from '../../services/ActivityService';
+import ActionMenuModal from '../../components/ActionMenuModal';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
+import * as Haptics from 'expo-haptics';
 export default function RecentsTab() {
   const { colors } = useTheme();
   const router = useRouter();
   const [pastActivities, setPastActivities] = useState<Activity[]>([]);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [actionActivity, setActionActivity] = useState<Activity | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -49,6 +51,8 @@ export default function RecentsTab() {
       case 'message': return 'chatbubble';
       case 'meeting': return 'people';
       case 'note': return 'document-text';
+      case 'email': return 'mail';
+      case 'whatsapp': return 'logo-whatsapp';
     }
   };
 
@@ -58,6 +62,8 @@ export default function RecentsTab() {
       case 'message': return 'Message';
       case 'meeting': return 'Meeting';
       case 'note': return 'Note';
+      case 'email': return 'Email';
+      case 'whatsapp': return 'WhatsApp';
     }
   };
 
@@ -140,6 +146,32 @@ export default function RecentsTab() {
       return dateB.getTime() - dateA.getTime(); // Most recent first
     });
 
+  const handleEditActivity = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setShowActivityModal(true);
+  };
+
+  const handleActionMenu = (activity: Activity) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActionActivity(activity);
+    setShowActionMenu(true);
+  };
+
+  const handleDeleteActivity = async (activity: Activity) => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+      await deleteActivity(activity.id, user.id);
+      await loadPastActivities();
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      Alert.alert('Error', 'Failed to delete activity');
+    }
+  };
+
   const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity 
       style={[
@@ -147,7 +179,7 @@ export default function RecentsTab() {
         { 
           backgroundColor: colors.categoryBg,
           borderLeftWidth: 3,
-          borderLeftColor: '#FF3B30' // iOS red color
+          borderLeftColor: '#FF3B30'
         }
       ]}
       onPress={() => {
@@ -163,6 +195,7 @@ export default function RecentsTab() {
           params: { contact: JSON.stringify(contactData) }
         });
       }}
+      onLongPress={() => handleActionMenu(item)}
     >
       <View style={styles.activityContent}>
         {/* Icon Column */}
@@ -170,15 +203,15 @@ export default function RecentsTab() {
           <View style={[
             styles.iconCircle,
             { 
-              backgroundColor: '#FF3B3015', // Red with transparency
+              backgroundColor: '#FF3B3015',
               borderWidth: 1,
-              borderColor: '#FF3B3030' // Red with more transparency
+              borderColor: '#FF3B3030'
             }
           ]}>
             <Ionicons 
               name={getActivityIcon(item.type)} 
               size={24} 
-              color="#FF3B30" // Red icon
+              color="#FF3B30"
               style={{ opacity: 0.9 }}
             />
           </View>
@@ -190,15 +223,23 @@ export default function RecentsTab() {
             <Text style={[
               styles.activityType, 
               { 
-                color: '#FF3B30', // Red text
+                color: '#FF3B30',
                 opacity: 0.9
               }
             ]}>
               {getActivityLabel(item.type)}
             </Text>
-            <Text style={[styles.dateText, { color: colors.secondaryText }]}>
-              {formatDate(new Date(item.date))}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.dateText, { color: colors.secondaryText, marginRight: 8 }]}>
+                {formatDate(new Date(item.date))}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleActionMenu(item)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={[styles.contactName, { color: colors.text }]}>
             {item.contactName}
@@ -214,29 +255,99 @@ export default function RecentsTab() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.header, { color: colors.text }]}>Recent Activities</Text>
-      {pastActivities.length === 0 ? (
-        <EmptyState 
-        icon="time-outline"
-        title="No Recent Activities"
-        message="Your recent activities with contacts will appear here"
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Recent</Text>
+      </View>
+
+      <View style={[styles.content, { backgroundColor: colors.background }]}>
+        {pastActivities.length === 0 ? (
+          <EmptyState 
+            icon="time-outline"
+            title="No Recent Activities"
+            message="Your recent activities with contacts will appear here"
+          />
+        ) : (
+          <SectionList
+            contentContainerStyle={styles.listContent}
+            sections={sections}
+            keyExtractor={item => item.id}
+            renderSectionHeader={({ section: { title } }) => (
+              <Text style={[styles.sectionHeader, { 
+                color: colors.secondaryText, 
+                backgroundColor: colors.background 
+              }]}>
+                {title}
+              </Text>
+            )}
+            renderItem={renderItem}
+            stickySectionHeaders={true}
+          />
+        )}
+      </View>
+
+      <ActionMenuModal
+        visible={showActionMenu}
+        onClose={() => {
+          setShowActionMenu(false);
+        }}
+        onEdit={() => {
+          if (actionActivity) {
+            handleEditActivity(actionActivity);
+            setShowActionMenu(false);
+          }
+        }}
+        onDelete={() => {
+          if (actionActivity) {
+            setShowDeleteConfirmation(true);
+            setShowActionMenu(false);
+          }
+        }}
       />
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={item => item.id}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
-              {title}
-            </Text>
-          )}
-          renderItem={renderItem}
-        />
-      )}
-      
+
+      <DeleteConfirmationModal
+        visible={showDeleteConfirmation}
+        onClose={() => {
+          setShowDeleteConfirmation(false);
+        }}
+        onConfirm={async () => {
+          if (actionActivity) {
+            await handleDeleteActivity(actionActivity);
+            setShowDeleteConfirmation(false);
+          }
+        }}
+      />
+
+      <ActivityModal
+        visible={showActivityModal}
+        onClose={() => {
+          setShowActivityModal(false);
+          setSelectedActivity(null);
+        }}
+        onSave={async (type: ActivityType, date: Date, notes?: string) => {
+          try {
+            if (!selectedActivity) return;
+            
+            await handleSaveActivity(
+              type,
+              date,
+              notes,
+              selectedActivity.contactId,
+              selectedActivity.contactName,
+              selectedActivity
+            );
+            
+            setShowActivityModal(false);
+            setSelectedActivity(null);
+            await loadPastActivities();
+          } catch (error) {
+            console.error('Error saving activity:', error);
+            Alert.alert('Error', 'Failed to save activity');
+          }
+        }}
+        activity={selectedActivity || undefined}
+      />
     </SafeAreaView>
-    
   );
 }
 
@@ -245,10 +356,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    fontSize: 24,
-    fontWeight: 'bold',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+  },
+  content: {
+    flex: 1,
+  },
+  listContent: {
     paddingBottom: 20,
   },
   sectionHeader: {

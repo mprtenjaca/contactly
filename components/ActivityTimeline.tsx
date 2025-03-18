@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -35,6 +36,26 @@ interface Props {
 
 export default function ActivityTimeline({ activities, onAddActivity, onEditActivity, isEmbedded }: Props) {
   const { colors, theme } = useTheme();
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const startPulseAnimation = () => {
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ]).start(() => startPulseAnimation());
+    };
+
+    startPulseAnimation();
+  }, []);
 
   const getActivityIcon = (type: ActivityType) => {
     switch (type) {
@@ -48,6 +69,8 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
         return 'document-text';
       case 'message':
         return 'chatbubble';
+      case 'whatsapp':
+        return 'logo-whatsapp';
       default:
         return 'ellipsis-horizontal';
     }
@@ -55,10 +78,12 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
 
   const getActivityColor = (type: ActivityType) => {
     switch (type) {
-      case 'meeting': return '#4CAF50';
-      case 'call': return '#2196F3';
+      case 'meeting': return '#0A73F5';
+      case 'call': return '#4CAF50';
       case 'email': return '#FF9800';
       case 'note': return '#9C27B0';
+      case 'message': return '#D51A3C';
+      case 'whatsapp': return '#25D366';
       default: return '#757575';
     }
   };
@@ -75,6 +100,8 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
         return 'Message';
       case 'note':
         return 'Note';
+      case 'whatsapp':
+        return 'WhatsApp';
       default:
         return type;
     }
@@ -140,9 +167,9 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
     });
 
     return sortedDates.map(({ label, activities }) => {
-      // Sort activities within each day from earliest to latest
+      // Sort activities within each day from latest to earliest
       const sortedActivities = activities.sort((a, b) => {
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
 
       return {
@@ -152,51 +179,92 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
     });
   };
 
-  const renderActivityItem = (item: Activity) => (
-    <TouchableOpacity 
-      key={item.id} 
-      style={styles.activityContainer}
-      onPress={() => onEditActivity?.(item)}
-    >
-      <View style={styles.iconColumn}>
-        <View style={[
-          styles.iconContainer, 
-          { backgroundColor: getActivityColor(item.type) + '20' }
-        ]}>
-          <Ionicons 
-            name={getActivityIcon(item.type)} 
-            size={24}
-            color={getActivityColor(item.type)} 
-          />
-        </View>
-        {item.id !== activities[activities.length - 1].id && (
-          <View style={[styles.timeline, { backgroundColor: colors.separator }]} />
-        )}
-      </View>
+  const getNextUpcomingActivity = () => {
+    const now = new Date();
+    return activities
+      .filter(activity => new Date(activity.date) > now)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]?.id;
+  };
 
-      <View style={styles.contentContainer}>
-        <View style={styles.headerContainer}>
-          <Text style={[
-            styles.activityType, 
-            { color: getActivityColor(item.type) }
+  const renderActivityItem = (item: Activity, index: number) => {
+    const isNextUpcoming = item.id === getNextUpcomingActivity();
+    const scale = isNextUpcoming ? pulseAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 1.02]
+    }) : 1;
+
+    const opacity = isNextUpcoming ? pulseAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0.1, 0.3, 0.1]
+    }) : 0;
+
+    return (
+      <TouchableOpacity 
+        key={item.id} 
+        style={styles.activityContainer}
+        onPress={() => onEditActivity?.(item)}
+      >
+        <View style={styles.iconColumn}>
+          <View style={[
+            styles.iconContainer, 
+            { backgroundColor: getActivityColor(item.type) + '50' }
           ]}>
-            {getActivityLabel(item.type)}
-          </Text>
-          <Text style={[styles.date, { color: colors.secondaryText }]}>
-            {format(item.date, 'MMM d, yyyy h:mm a')}
-          </Text>
-        </View>
-
-        <View style={styles.contentWrapper}>
-          {item.notes && (
-            <Text style={[styles.notes, { color: colors.text }]}>
-              {item.notes}
-            </Text>
+            <Ionicons 
+              name={getActivityIcon(item.type)} 
+              size={24}
+              color={getActivityColor(item.type)} 
+            />
+          </View>
+          {index < activities.length - 1 && (
+            <View style={[styles.timeline, { backgroundColor: colors.separator }]} />
           )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        <Animated.View style={[
+          styles.contentContainer,
+          {
+            transform: [{ scale }],
+          }
+        ]}>
+          {isNextUpcoming && (
+            <>
+              <Animated.View style={[
+                styles.pulseOverlay,
+                {
+                  backgroundColor: getActivityColor(item.type),
+                  opacity,
+                }
+              ]} />
+              <View style={styles.upcomingBadge}>
+                <Text style={[styles.upcomingText, { color: getActivityColor(item.type) }]}>
+                  Next Up
+                </Text>
+              </View>
+            </>
+          )}
+          <View style={styles.headerContainer}>
+            <Text style={[
+              styles.activityType, 
+              { color: getActivityColor(item.type) }
+            ]}>
+              {getActivityLabel(item.type)}
+            </Text>
+            <Text style={[styles.date, { color: colors.secondaryText }]}>
+              {format(item.date, 'MMM d, yyyy h:mm a')}
+            </Text>
+          </View>
+
+          <View style={styles.contentWrapper}>
+            {item.notes && (
+              <Text style={[styles.notes, { color: colors.text }]}>
+                {item.notes}
+              </Text>
+            )}
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
 
   const EmptyState = () => {
     const { colors } = useTheme();
@@ -224,13 +292,13 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      paddingHorizontal: 8,
     },
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: 12,
+      paddingHorizontal: 16,
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     title: {
@@ -249,8 +317,8 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
       fontSize: 15,
       fontWeight: '500',
     },
-    scrollContent: {
-      flexGrow: 1,
+    timelineContent: {
+      width: '100%',
     },
     sectionHeader: {
       padding: 16,
@@ -265,8 +333,8 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
     },
     activityContainer: {
       flexDirection: 'row',
-      marginBottom: 16,
       paddingHorizontal: 12,
+      marginBottom: 16,
     },
     iconColumn: {
       alignItems: 'center',
@@ -284,15 +352,17 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
     timeline: {
       width: 2,
       flex: 1,
-      marginTop: 12,
-      opacity: 0.6,
+      marginTop: 8,
+      marginBottom: -8,
+      opacity: 0.8,
     },
     contentContainer: {
       flex: 1,
-      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      backgroundColor: colors.containerBg,
       borderRadius: 12,
       padding: 16,
       marginRight: 12,
+      overflow: 'hidden',
     },
     headerContainer: {
       flexDirection: 'row',
@@ -347,6 +417,34 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
       lineHeight: 22,
       opacity: 0.7,
     },
+    pulseOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    upcomingBadge: {
+      position: 'absolute',
+      top: -5,
+      right: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 5,
+      backgroundColor: colors.background,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    upcomingText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
   });
 
   // Add dynamic styles inside component
@@ -373,53 +471,22 @@ export default function ActivityTimeline({ activities, onAddActivity, onEditActi
         </TouchableOpacity>
       </View>
 
-      {isEmbedded ? (
-        <ScrollView 
-          style={styles.scrollContent}
-          contentContainerStyle={{ 
-            flexGrow: 1,
-            paddingBottom: 20 
-          }}
-          showsVerticalScrollIndicator={false}
-          bounces={true}
-        >
-          {activities.length > 0 ? (
-            groupActivitiesByDate(activities).map((section) => (
-              <View key={section.date}>
-                <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
-                  <Text style={[styles.sectionHeaderText, { color: colors.secondaryText }]}>
-                    {section.date}
-                  </Text>
-                </View>
-                {section.data.map(renderActivityItem)}
-              </View>
-            ))
-          ) : (
-            <EmptyState />
-          )}
-        </ScrollView>
-      ) : (
-        <FlatList
-          data={groupActivitiesByDate(activities)}
-          keyExtractor={item => item.date}
-          renderItem={({ item: section }) => (
-            <View>
+      <View style={styles.timelineContent}>
+        {activities.length > 0 ? (
+          groupActivitiesByDate(activities).map((section) => (
+            <View key={section.date}>
               <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
                 <Text style={[styles.sectionHeaderText, { color: colors.secondaryText }]}>
                   {section.date}
                 </Text>
               </View>
-              {section.data.map(renderActivityItem)}
+              {section.data.map((activity, index) => renderActivityItem(activity, index))}
             </View>
-          )}
-          contentContainerStyle={{ 
-            flexGrow: 1,
-            paddingBottom: 20 
-          }}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={EmptyState}
-        />
-      )}
+          ))
+        ) : (
+          <EmptyState />
+        )}
+      </View>
     </View>
   );
 } 

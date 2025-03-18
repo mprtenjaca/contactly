@@ -113,7 +113,6 @@ export const signIn = async (email: string, password: string) => {
     
     return { data: { session: data.session } };
   } catch (error) {
-    console.error('Error signing in:', error);
     throw error;
   }
 };

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -18,7 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
-export type ActivityType = 'call' | 'message' | 'meeting' | 'note';
+export type ActivityType = 'call' | 'message' | 'meeting' | 'note' | 'email' | 'whatsapp' | 'other';
 
 interface Activity {
   id: string;
@@ -47,6 +48,7 @@ export default function ActivityModal({
   const [date, setDate] = useState(activity?.date || new Date());
   const [notes, setNotes] = useState(activity?.notes || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(date); // Temporary date for the picker
 
   const activities: { type: ActivityType; icon: string; label: string }[] = [
     { type: 'call', icon: 'call', label: 'Call' },
@@ -88,18 +90,35 @@ export default function ActivityModal({
     return `${date.toLocaleDateString()} ${timeStr}`;
   };
 
+  const handleDateConfirm = () => {
+    setDate(tempDate);
+    setShowDatePicker(false);
+  };
+
+  const handleDateCancel = () => {
+    setTempDate(date); // Reset temp date
+    setShowDatePicker(false);
+  };
+
   const styles = StyleSheet.create({
-    modalOverlay: {
+    modalContainer: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    modalInner: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+      padding: 16,
     },
     modalContent: {
-      width: width - 40,
-      borderRadius: 12,
-      padding: 20,
-      maxHeight: '80%',
+      width: '100%',
+      maxWidth: 500,
+      borderRadius: 16,
+      padding: 24,
       shadowColor: "#000",
       shadowOffset: {
         width: 0,
@@ -141,12 +160,13 @@ export default function ActivityModal({
     dateButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 12,
-      borderRadius: 8,
+      padding: 16,
+      borderRadius: 12,
       marginBottom: 16,
     },
     dateButtonText: {
-      marginLeft: 8,
+      flex: 1,
+      marginLeft: 12,
       fontSize: 16,
     },
     input: {
@@ -157,21 +177,34 @@ export default function ActivityModal({
       height: 100,
       textAlignVertical: 'top',
     },
-    datePickerContainer: {
-      backgroundColor: colors.categoryBg,
+    datePickerWrapper: {
       borderRadius: 12,
-      marginBottom: 16,
-      padding: 16,
-      alignItems: 'center',
-    },
-    doneDateButton: {
-      padding: 12,
-      borderRadius: 8,
-      alignItems: 'center',
+      padding: 8,
       marginTop: 8,
+      overflow: 'hidden',
     },
-    doneDateButtonText: {
-      color: '#fff',
+    datePickerContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    datePicker: {
+      width: '100%',
+      backgroundColor: 'transparent',
+    },
+    datePickerButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 16,
+      paddingHorizontal: 16,
+      marginBottom: 8,
+    },
+    datePickerButton: {
+      flex: 1,
+      padding: 16,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    datePickerButtonText: {
       fontSize: 16,
       fontWeight: '600',
     },
@@ -201,129 +234,190 @@ export default function ActivityModal({
       fontSize: 16,
       fontWeight: '600',
     },
+    closeButton: {
+      padding: 8,
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      marginBottom: 8,
+      marginTop: 8,
+    },
+    dateButtonIcon: {
+      opacity: 0.5,
+    },
+    headerButton: {
+      fontSize: 17,
+      fontWeight: '600',
+    },
   });
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {activity ? 'Edit Activity' : 'New Activity'}
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+      <View style={[styles.modalContainer, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardView}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalInner}>
+              <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                {showDatePicker ? (
+                  // Date Picker View
+                  <View>
+                    <View style={styles.modalHeader}>
+                      <Text style={[styles.modalTitle, { color: colors.text }]}>Select Date & Time</Text>
+                    </View>
+                    <View style={[styles.datePickerWrapper, { backgroundColor: colors.categoryBg }]}>
+                      <View style={styles.datePickerContent}>
+                        <DateTimePicker
+                          value={tempDate}
+                          mode="datetime"
+                          display="spinner"
+                          onChange={(event, selectedDate) => {
+                            if (selectedDate) {
+                              setTempDate(selectedDate);
+                            }
+                          }}
+                          textColor={colors.text}
+                          themeVariant={theme}
+                          style={styles.datePicker}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.datePickerButtons}>
+                      <TouchableOpacity
+                        style={[styles.datePickerButton, { backgroundColor: colors.searchBar }]}
+                        onPress={handleDateCancel}
+                      >
+                        <Text style={[styles.datePickerButtonText, { color: colors.text }]}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.datePickerButton, { backgroundColor: colors.selectedCategory }]}
+                        onPress={handleDateConfirm}
+                      >
+                        <Text style={[styles.datePickerButtonText, { color: '#fff' }]}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  // Main Activity Form View
+                  <>
+                    <View style={styles.modalHeader}>
+                      <Text style={[styles.modalTitle, { color: colors.text }]}>
+                        {activity ? 'Edit Activity' : 'New Activity'}
+                      </Text>
+                      <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <Ionicons name="close" size={24} color={colors.text} />
+                      </TouchableOpacity>
+                    </View>
 
-          <ScrollView bounces={false}>
-            <View style={styles.activityTypes}>
-              {activities.map(activity => (
-                <TouchableOpacity
-                  key={activity.type}
-                  style={[
-                    styles.activityButton,
-                    { backgroundColor: colors.categoryBg },
-                    type === activity.type && { backgroundColor: colors.selectedCategory }
-                  ]}
-                  onPress={() => setType(activity.type)}
-                >
-                  <Ionicons
-                    name={activity.icon as any}
-                    size={24}
-                    color={type === activity.type ? '#fff' : colors.text}
-                  />
-                  <Text
-                    style={[
-                      styles.activityButtonText,
-                      { color: type === activity.type ? '#fff' : colors.text }
-                    ]}
-                  >
-                    {activity.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <ScrollView bounces={false}>
+                      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>
+                        Activity Type
+                      </Text>
+                      <View style={styles.activityTypes}>
+                        {activities.map(activity => (
+                          <TouchableOpacity
+                            key={activity.type}
+                            style={[
+                              styles.activityButton,
+                              { backgroundColor: colors.categoryBg },
+                              type === activity.type && { backgroundColor: colors.selectedCategory }
+                            ]}
+                            onPress={() => setType(activity.type)}
+                          >
+                            <Ionicons
+                              name={activity.icon as any}
+                              size={24}
+                              color={type === activity.type ? '#fff' : colors.text}
+                            />
+                            <Text
+                              style={[
+                                styles.activityButtonText,
+                                { color: type === activity.type ? '#fff' : colors.text }
+                              ]}
+                            >
+                              {activity.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
 
-            <TouchableOpacity
-              style={[styles.dateButton, { backgroundColor: colors.categoryBg }]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Ionicons name="calendar" size={20} color={colors.text} />
-              <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                {formatDate(date)}
-              </Text>
-            </TouchableOpacity>
+                      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>
+                        Date & Time
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.dateButton, { backgroundColor: colors.categoryBg }]}
+                        onPress={() => {
+                          setTempDate(date);
+                          setShowDatePicker(true);
+                        }}
+                      >
+                        <Ionicons name="calendar" size={20} color={colors.text} />
+                        <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                          {formatDate(date)}
+                        </Text>
+                        <Ionicons 
+                          name="chevron-forward" 
+                          size={20} 
+                          color={colors.text} 
+                          style={styles.dateButtonIcon}
+                        />
+                      </TouchableOpacity>
 
-            {showDatePicker && (
-              <View style={styles.datePickerContainer}>
-                <DateTimePicker
-                  value={date}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) {
-                      setDate(selectedDate);
-                    }
-                  }}
-                  textColor={colors.text}
-                  themeVariant={theme}
-                />
-                <TouchableOpacity
-                  style={[styles.doneDateButton, { backgroundColor: colors.selectedCategory }]}
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <Text style={styles.doneDateButtonText}>Done</Text>
-                </TouchableOpacity>
+                      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>
+                        Notes
+                      </Text>
+                      <TextInput
+                        style={[styles.input, { 
+                          backgroundColor: colors.searchBar,
+                          color: colors.text 
+                        }]}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Add any additional notes..."
+                        placeholderTextColor={colors.secondaryText}
+                        multiline
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                        blurOnSubmit={true}
+                      />
+                    </ScrollView>
+
+                    <View style={styles.buttonContainer}>
+                      <TouchableOpacity
+                        style={[styles.saveButton, { backgroundColor: colors.selectedCategory }]}
+                        onPress={() => onSave(type, date, notes)}
+                      >
+                        <Text style={styles.saveButtonText}>
+                          {activity ? 'Save Changes' : 'Add Activity'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {activity && onDelete && (
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => {
+                            onDelete();
+                            onClose();
+                          }}
+                        >
+                          <Text style={styles.deleteButtonText}>Delete Activity</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </>
+                )}
               </View>
-            )}
-
-            <TextInput
-              style={[styles.input, { 
-                backgroundColor: colors.searchBar,
-                color: colors.text 
-              }]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Notes..."
-              placeholderTextColor={colors.secondaryText}
-              multiline
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-              blurOnSubmit={true}
-            />
-          </ScrollView>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: colors.selectedCategory }]}
-              onPress={() => {
-                onSave(type, date, notes);
-              }}
-            >
-              <Text style={styles.saveButtonText}>
-                {activity ? 'Save Changes' : 'Add Activity'}
-              </Text>
-            </TouchableOpacity>
-
-            {activity && onDelete && (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => {
-                  onDelete();
-                  onClose();
-                }}
-              >
-                <Text style={styles.deleteButtonText}>Delete Activity</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

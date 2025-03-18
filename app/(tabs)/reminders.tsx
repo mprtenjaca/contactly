@@ -1,28 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList, Alert, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ActivityType } from '../../components/ActivityModal';
-import { getFutureActivities } from '../../services/DatabaseService';
+import { getFutureActivities, deleteActivity } from '../../services/DatabaseService';
 import { getCurrentUser } from '../../services/AuthService';
 import EmptyState from '../../components/EmptyState';
-
-interface Activity {
-  id: string;
-  type: ActivityType;
-  date: Date;
-  notes?: string;
-  contactId: string;
-  contactName: string;
-}
+import ActivityModal from '../../components/ActivityModal';
+import { handleSaveActivity } from '../../services/ActivityService';
+import { Activity } from '../../services/ActivityService';
+import ActionMenuModal from '../../components/ActionMenuModal';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
+import * as Haptics from 'expo-haptics';
 
 export default function RemindersTab() {
   const { colors } = useTheme();
   const router = useRouter();
   const [futureActivities, setFutureActivities] = useState<Activity[]>([]);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [actionActivity, setActionActivity] = useState<Activity | null>(null);
 
   useEffect(() => {
     loadFutureActivities();
@@ -55,6 +57,8 @@ export default function RemindersTab() {
       case 'message': return 'chatbubble';
       case 'meeting': return 'people';
       case 'note': return 'document-text';
+      case 'email': return 'mail';
+      case 'whatsapp': return 'logo-whatsapp';
     }
   };
 
@@ -84,6 +88,8 @@ export default function RemindersTab() {
       case 'message': return 'Message';
       case 'meeting': return 'Meeting';
       case 'note': return 'Note';
+      case 'email': return 'Email';
+      case 'whatsapp': return 'WhatsApp';
     }
   };
 
@@ -104,6 +110,32 @@ export default function RemindersTab() {
       data: items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     }));
 
+  const handleEditActivity = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setShowActivityModal(true);
+  };
+
+  const handleActionMenu = (activity: Activity) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActionActivity(activity);
+    setShowActionMenu(true);
+  };
+
+  const handleDeleteActivity = async (activity: Activity) => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+      await deleteActivity(activity.id, user.id);
+      await loadFutureActivities();
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      Alert.alert('Error', 'Failed to delete activity');
+    }
+  };
+
   const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity 
       style={[styles.reminderItem, { backgroundColor: colors.categoryBg }]}
@@ -120,6 +152,7 @@ export default function RemindersTab() {
           params: { contact: JSON.stringify(contactData) }
         });
       }}
+      onLongPress={() => handleActionMenu(item)}
     >
       <View style={styles.reminderContent}>
         {/* Icon Column */}
@@ -142,12 +175,20 @@ export default function RemindersTab() {
             <Text style={[styles.activityType, { color: colors.selectedCategory }]}>
               {getActivityLabel(item.type)}
             </Text>
-            <Text style={[styles.dateText, { color: colors.secondaryText }]}>
-              {new Date(item.date).toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.dateText, { color: colors.secondaryText, marginRight: 8 }]}>
+                {new Date(item.date).toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleActionMenu(item)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={[styles.contactName, { color: colors.text }]}>
             {item.contactName}
@@ -163,27 +204,98 @@ export default function RemindersTab() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.header, { color: colors.text }]}>Upcoming Activities</Text>
-      
-      {futureActivities.length === 0 ? (
-        <EmptyState 
-        icon="time-outline"
-        title="No Upcoming Activities"
-        message="Your upcoming activities will appear here"
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Reminders</Text>
+      </View>
+
+      <View style={[styles.content, { backgroundColor: colors.background }]}>
+        {futureActivities.length === 0 ? (
+          <EmptyState 
+            icon="time-outline"
+            title="No Upcoming Activities"
+            message="Your upcoming activities will appear here"
+          />
+        ) : (
+          <SectionList
+            contentContainerStyle={styles.listContent}
+            sections={sections}
+            keyExtractor={item => item.id}
+            renderSectionHeader={({ section: { title } }) => (
+              <Text style={[styles.sectionHeader, { 
+                color: colors.secondaryText, 
+                backgroundColor: colors.background 
+              }]}>
+                {title}
+              </Text>
+            )}
+            renderItem={renderItem}
+            stickySectionHeaders={true}
+          />
+        )}
+      </View>
+
+      <ActionMenuModal
+        visible={showActionMenu}
+        onClose={() => {
+          setShowActionMenu(false);
+        }}
+        onEdit={() => {
+          if (actionActivity) {
+            handleEditActivity(actionActivity);
+            setShowActionMenu(false);
+          }
+        }}
+        onDelete={() => {
+          if (actionActivity) {
+            setShowDeleteConfirmation(true);
+            setShowActionMenu(false);
+          }
+        }}
       />
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={item => item.id}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
-              {title}
-            </Text>
-          )}
-          renderItem={renderItem}
-        />
-      )}
+
+      <DeleteConfirmationModal
+        visible={showDeleteConfirmation}
+        onClose={() => {
+          setShowDeleteConfirmation(false);
+        }}
+        onConfirm={async () => {
+          if (actionActivity) {
+            await handleDeleteActivity(actionActivity);
+            setShowDeleteConfirmation(false);
+          }
+        }}
+      />
+
+      <ActivityModal
+        visible={showActivityModal}
+        onClose={() => {
+          setShowActivityModal(false);
+          setSelectedActivity(null);
+        }}
+        onSave={async (type: ActivityType, date: Date, notes?: string) => {
+          try {
+            if (!selectedActivity) return;
+            
+            await handleSaveActivity(
+              type,
+              date,
+              notes,
+              selectedActivity.contactId,
+              selectedActivity.contactName,
+              selectedActivity
+            );
+            
+            setShowActivityModal(false);
+            setSelectedActivity(null);
+            await loadFutureActivities();
+          } catch (error) {
+            console.error('Error saving activity:', error);
+            Alert.alert('Error', 'Failed to save activity');
+          }
+        }}
+        activity={selectedActivity || undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -193,46 +305,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    fontSize: 24,
-    fontWeight: 'bold',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
-  title: {
+  headerTitle: {
     fontSize: 34,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontWeight: '700',
   },
-  subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-    marginBottom: 16,
+  content: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 20,
   },
   sectionHeader: {
     fontSize: 13,
-    paddingHorizontal: 18,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    paddingVertical: 12,
-    // backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    letterSpacing: 0.3,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
-    opacity: 0.7,
+    letterSpacing: 0.5,
+    padding: 16,
+    paddingBottom: 8,
   },
   reminderItem: {
     padding: 16,
