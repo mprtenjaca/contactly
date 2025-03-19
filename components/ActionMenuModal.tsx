@@ -10,11 +10,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
+interface ActionOption {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}
+
 interface ActionMenuModalProps {
   visible: boolean;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  additionalOptions?: ActionOption[];
 }
 
 export default function ActionMenuModal({
@@ -22,6 +29,7 @@ export default function ActionMenuModal({
   onClose,
   onEdit,
   onDelete,
+  additionalOptions = [],
 }: ActionMenuModalProps) {
   const { colors, theme } = useTheme();
 
@@ -41,6 +49,24 @@ export default function ActionMenuModal({
                 shadowColor: theme === 'dark' ? '#000' : '#666',
               }
             ]}>
+              {/* Additional Options */}
+              {additionalOptions.map((option, index) => (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.option, { borderBottomColor: colors.separator }]}
+                  onPress={() => {
+                    onClose();
+                    option.onPress();
+                  }}
+                >
+                  <Ionicons name={option.icon as any} size={22} color={colors.text} />
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* Edit Option */}
               <TouchableOpacity
                 style={[styles.option, { borderBottomColor: colors.separator }]}
                 onPress={() => {
@@ -54,6 +80,7 @@ export default function ActionMenuModal({
                 </Text>
               </TouchableOpacity>
 
+              {/* Delete Option */}
               <TouchableOpacity
                 style={styles.option}
                 onPress={() => {

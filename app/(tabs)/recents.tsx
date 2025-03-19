@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration } from 'react-native';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration, Platform, TextInput, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,16 @@ import { Activity } from '../../services/ActivityService';
 import ActionMenuModal from '../../components/ActionMenuModal';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import * as Haptics from 'expo-haptics';
+
+const ACTIVITY_TYPES: ActivityType[] = [
+  'call',
+  'message',
+  'meeting',
+  'note',
+  'email',
+  'whatsapp'
+];
+
 export default function RecentsTab() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -24,6 +34,23 @@ export default function RecentsTab() {
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [actionActivity, setActionActivity] = useState<Activity | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState<ActivityType[]>([]);
+  const [dateRange, setDateRange] = useState<{start: Date | null, end: Date | null}>({
+    start: null,
+    end: null
+  });
+  const [selectedDateRange, setSelectedDateRange] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+
+  const dateRangeOptions = [
+    { label: 'All Time', value: 'all' },
+    { label: 'Last 7 Days', value: '7days' },
+    { label: 'Last 30 Days', value: '30days' },
+    { label: 'Last 3 Months', value: '3months' },
+  ];
 
   useFocusEffect(
     React.useCallback(() => {
@@ -101,8 +128,28 @@ export default function RecentsTab() {
     });
   };
 
-  // Group activities by date
-  const groupedActivities = pastActivities.reduce((acc: { [key: string]: Activity[] }, activity) => {
+  // Filter activities based on search, type, and date range
+  const filteredActivities = React.useMemo(() => {
+    return pastActivities.filter(activity => {
+      // Search filter
+      const matchesSearch = searchQuery === '' || 
+        activity.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        activity.notes?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Type filter
+      const matchesType = selectedTypes.length === 0 || selectedTypes.includes(activity.type);
+
+      // Date range filter
+      const activityDate = new Date(activity.date);
+      const matchesDateRange = (!dateRange.start || activityDate >= dateRange.start) &&
+                              (!dateRange.end || activityDate <= dateRange.end);
+
+      return matchesSearch && matchesType && matchesDateRange;
+    });
+  }, [pastActivities, searchQuery, selectedTypes, dateRange]);
+
+  // Group filtered activities
+  const groupedActivities = filteredActivities.reduce((acc: { [key: string]: Activity[] }, activity) => {
     const date = new Date(activity.date);
     const dateKey = formatDate(date);
     if (!acc[dateKey]) {
@@ -172,6 +219,53 @@ export default function RecentsTab() {
     }
   };
 
+  const toggleActivityType = (type: ActivityType) => {
+    setSelectedTypes(prev => 
+      prev.includes(type) 
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleDateRangeSelect = (value: string) => {
+    setSelectedDateRange(value);
+    if (value === 'all') {
+      setDateRange({ start: null, end: null });
+    } else {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      const end = new Date(today);
+      const start = new Date(today);
+      start.setHours(0, 0, 0, 0);
+
+      switch (value) {
+        case '7days':
+          start.setDate(start.getDate() - 7);
+          break;
+        case '30days':
+          start.setDate(start.getDate() - 30);
+          break;
+        case '3months':
+          start.setMonth(start.getMonth() - 3);
+          break;
+      }
+      
+      setDateRange({ start, end });
+    }
+    setShowDateModal(false);
+  };
+
+  const getDateRangeText = () => {
+    switch (selectedDateRange) {
+      case 'all': return 'All Time';
+      case '7days': return 'Last 7 Days';
+      case '30days': return 'Last 30 Days';
+      case '3months': return 'Last 3 Months';
+      default: return 'All Time';
+    }
+  };
+
   const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity 
       style={[
@@ -179,7 +273,21 @@ export default function RecentsTab() {
         { 
           backgroundColor: colors.categoryBg,
           borderLeftWidth: 3,
-          borderLeftColor: '#FF3B30'
+          borderLeftColor: '#FF3B30',
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOffset: {
+                width: 0,
+                height: 2,
+              },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+            },
+            android: {
+              elevation: 3,
+            },
+          }),
         }
       ]}
       onPress={() => {
@@ -258,14 +366,134 @@ export default function RecentsTab() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Recent</Text>
+
+        {/* Search Bar */}
+        <View style={[styles.searchContainer, { backgroundColor: colors.categoryBg }]}>
+          <Ionicons name="search" size={20} color={colors.secondaryText} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search recent activities..."
+            placeholderTextColor={colors.secondaryText}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filters Row */}
+        <View style={[styles.filtersRow]}>
+          <TouchableOpacity 
+            style={[styles.filterButton, { backgroundColor: colors.categoryBg }]}
+            onPress={() => setShowTypeModal(true)}
+          >
+            <Text style={[styles.filterButtonText, { color: colors.text }]}>
+              {selectedTypes.length === 0 
+                ? "All Types" 
+                : `${selectedTypes.length} Selected`}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.filterButton, { backgroundColor: colors.categoryBg }]}
+            onPress={() => setShowDateModal(true)}
+          >
+            <Text style={[styles.filterButtonText, { color: colors.text }]}>
+              {getDateRangeText()}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Activity Type Modal */}
+        <Modal
+          visible={showTypeModal}
+          transparent
+          onRequestClose={() => setShowTypeModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => setShowTypeModal(false)}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.categoryBg }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Select Activity Types</Text>
+              {ACTIVITY_TYPES.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.modalItem, { borderBottomColor: colors.border }]}
+                  onPress={() => toggleActivityType(type)}
+                >
+                  <View style={styles.modalItemContent}>
+                    <Ionicons 
+                      name={getActivityIcon(type)} 
+                      size={24} 
+                      color={selectedTypes.includes(type) ? '#FF3B30' : colors.text} 
+                    />
+                    <Text style={[
+                      styles.modalItemText,
+                      { color: selectedTypes.includes(type) ? '#FF3B30' : colors.text }
+                    ]}>
+                      {getActivityLabel(type)}
+                    </Text>
+                  </View>
+                  {selectedTypes.includes(type) && (
+                    <Ionicons name="checkmark" size={24} color="#FF3B30" />
+                  )}
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: '#FF3B30' }]}
+                onPress={() => setShowTypeModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Date Range Modal */}
+        <Modal
+          visible={showDateModal}
+          transparent
+          onRequestClose={() => setShowDateModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => setShowDateModal(false)}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.categoryBg }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Select Date Range</Text>
+              {dateRangeOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.modalItem, { borderBottomColor: colors.border }]}
+                  onPress={() => handleDateRangeSelect(option.value)}
+                >
+                  <Text style={[styles.modalItemText, { color: colors.text }]}>
+                    {option.label}
+                  </Text>
+                  {selectedDateRange === option.value && (
+                    <Ionicons name="checkmark" size={24} color="#FF3B30" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
 
       <View style={[styles.content, { backgroundColor: colors.background }]}>
-        {pastActivities.length === 0 ? (
+        {filteredActivities.length === 0 ? (
           <EmptyState 
-            icon="time-outline"
-            title="No Recent Activities"
-            message="Your recent activities with contacts will appear here"
+            icon="search"
+            title={searchQuery ? "No Matching Activities" : "No Recent Activities"}
+            message={searchQuery ? "Try adjusting your search or filters" : "Your recent activities with contacts will appear here"}
           />
         ) : (
           <SectionList
@@ -281,7 +509,8 @@ export default function RecentsTab() {
               </Text>
             )}
             renderItem={renderItem}
-            stickySectionHeaders={true}
+            stickySectionHeadersEnabled={true}
+            showsVerticalScrollIndicator={false}
           />
         )}
       </View>
@@ -362,7 +591,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 34,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
@@ -371,16 +601,16 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   sectionHeader: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     padding: 16,
     paddingBottom: 8,
   },
   activityItem: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginHorizontal: 16,
     marginBottom: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -411,22 +641,110 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   activityType: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   contactName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 17,
+    fontWeight: '600',
     marginBottom: 4,
+    letterSpacing: 0.1,
   },
   dateText: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 15,
+    fontWeight: '500',
+    opacity: 0.8,
   },
   notes: {
     fontSize: 15,
-    lineHeight: 20,
-    opacity: 0.7,
+    lineHeight: 22,
+    fontWeight: '400',
+    opacity: 0.9,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    height: 44,
+    borderRadius: 10,
+    marginHorizontal: 0,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    height: '100%',
+  },
+  filtersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingHorizontal: 20,
+    gap: 8,
+    marginHorizontal: -20,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    height: 44,
+  },
+  filterButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 16,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  modalItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalItemText: {
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  modalButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '600',
   },
 }); 
