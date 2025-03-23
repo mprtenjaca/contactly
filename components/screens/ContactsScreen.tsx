@@ -695,6 +695,7 @@ export default function ContactsScreen() {
             horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesList}
+            keyboardShouldPersistTaps="handled"
           >
             <TouchableOpacity
               style={[
@@ -804,6 +805,7 @@ export default function ContactsScreen() {
           <ScrollView 
             style={[styles.contactsList, { backgroundColor: colors.background }]}
             contentContainerStyle={[styles.contactsListContent, { backgroundColor: colors.background }]}
+            keyboardShouldPersistTaps="handled"
           >
             {filteredContacts.map((contact, index) => (
               <TouchableOpacity 
@@ -852,6 +854,7 @@ export default function ContactsScreen() {
               maxToRenderPerBatch={10}
               windowSize={5}
               getItemLayout={getItemLayout}
+              keyboardShouldPersistTaps="handled"
               onScrollToIndexFailed={(info) => {
                 const wait = new Promise(resolve => setTimeout(resolve, 500));
                 wait.then(() => {
@@ -895,7 +898,7 @@ export default function ContactsScreen() {
                 >
                   <Text style={[
                     styles.letterText,
-                    { color: colors.secondaryText }
+                    { color: colors.selectedCategory }
                   ]}>
                     {letter}
                   </Text>

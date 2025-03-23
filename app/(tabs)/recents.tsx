@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration, Platform, TextInput, ScrollView, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration, Platform, TextInput, ScrollView, Modal, SafeAreaView } from 'react-native'; 
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -500,6 +499,7 @@ export default function RecentsTab() {
             contentContainerStyle={styles.listContent}
             sections={sections}
             keyExtractor={item => item.id}
+            keyboardShouldPersistTaps="handled"
             renderSectionHeader={({ section: { title } }) => (
               <Text style={[styles.sectionHeader, { 
                 color: colors.secondaryText, 
@@ -591,8 +591,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   content: {
     flex: 1,
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   sectionHeader: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,

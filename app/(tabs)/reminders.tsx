@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList, Alert, Vibration, RefreshControl, Platform, TextInput, ScrollView, Modal, Share } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList, Alert, Vibration, RefreshControl, Platform, TextInput, ScrollView, Modal, Share, SafeAreaView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -763,6 +762,7 @@ export default function RemindersTab() {
             contentContainerStyle={styles.listContent}
             sections={sections}
             keyExtractor={item => item.id}
+            keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -840,13 +840,13 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 10,
   },
   headerTitle: {
     fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   headerTitleRow: {
     flexDirection: 'row',

@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { getCurrentUser } from '../../services/AuthService';
 import { getAllCategories, saveContact } from '../../services/DatabaseService';
+import * as Contacts from 'expo-contacts';
 
 interface Category {
   id: string;
@@ -35,6 +36,7 @@ export default function NewContact() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saveToDevice, setSaveToDevice] = useState(false);
 
   useEffect(() => {
     loadCategories();
@@ -51,6 +53,37 @@ export default function NewContact() {
     }
   };
 
+  const saveToDeviceContacts = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your contacts to save this contact to your device.');
+        return null;
+      }
+
+      const contact = {
+        firstName: name.trim(),
+        name: name.trim(),
+        phoneNumbers: phoneNumber.trim() ? [{
+          number: phoneNumber.trim(),
+          label: 'mobile'
+        }] : [],
+        emails: email.trim() ? [{
+          email: email.trim(),
+          label: 'work'
+        }] : [],
+        note: notes.trim(),
+        contactType: Contacts.ContactTypes.Person
+      };
+
+      const deviceContactId = await Contacts.addContactAsync(contact);
+      return deviceContactId;
+    } catch (error) {
+      console.error('Error saving to device contacts:', error);
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Name is required');
@@ -64,8 +97,18 @@ export default function NewContact() {
 
       const selectedCategoryObj = categories.find(cat => cat.id === selectedCategory);
       
+      // First save to device contacts if checkbox is checked
+      let deviceContactId = null;
+      if (saveToDevice) {
+        deviceContactId = await saveToDeviceContacts();
+        if (!deviceContactId) {
+          Alert.alert('Warning', 'Failed to save to device contacts. Contact will only be saved in app.');
+        }
+      }
+
+      // Use device contact ID if available, otherwise generate a new one
       const newContact = {
-        id: `contact_${Date.now()}`,
+        id: deviceContactId || `contact_${Date.now()}`,
         name: name.trim(),
         phoneNumbers: phoneNumber.trim() ? [{ number: phoneNumber.trim() }] : [],
         email: email.trim(),
@@ -74,7 +117,9 @@ export default function NewContact() {
         userId: user.id
       };
 
+      // Save to app database
       await saveContact(newContact, user.id);
+
       router.back();
     } catch (error) {
       console.error('Error saving contact:', error);
@@ -90,27 +135,28 @@ export default function NewContact() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.inner}>
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.background }]}>
-              <TouchableOpacity 
-                onPress={() => router.back()} 
-                style={styles.headerButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>New Contact</Text>
-              <View style={styles.headerButton} />
-            </View>
-
-            <ScrollView 
-              style={styles.form}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.formContent}
+        <View style={styles.inner}>
+          {/* Header */}
+          <View style={[styles.header, { backgroundColor: colors.background }]}>
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              style={styles.headerButton}
             >
-              {/* Form Fields */}
-              <View style={styles.fieldsContainer}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>New Contact</Text>
+            <View style={styles.headerButton} />
+          </View>
+
+          <ScrollView 
+            style={styles.form}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Form Fields */}
+            <View style={styles.fieldsContainer}>
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={[styles.inputContainer, { backgroundColor: colors.searchBar }]}>
                   <Text style={[styles.label, { color: colors.secondaryText }]}>Name</Text>
                   <TextInput
@@ -121,7 +167,9 @@ export default function NewContact() {
                     placeholderTextColor={colors.secondaryText}
                   />
                 </View>
+              </TouchableWithoutFeedback>
 
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={[styles.inputContainer, { backgroundColor: colors.searchBar }]}>
                   <Text style={[styles.label, { color: colors.secondaryText }]}>Phone</Text>
                   <TextInput
@@ -133,7 +181,9 @@ export default function NewContact() {
                     keyboardType="phone-pad"
                   />
                 </View>
+              </TouchableWithoutFeedback>
 
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={[styles.inputContainer, { backgroundColor: colors.searchBar }]}>
                   <Text style={[styles.label, { color: colors.secondaryText }]}>Email</Text>
                   <TextInput
@@ -146,36 +196,62 @@ export default function NewContact() {
                     autoCapitalize="none"
                   />
                 </View>
+              </TouchableWithoutFeedback>
 
-                {/* Categories */}
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Category</Text>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoriesContainer}
-                >
-                  {categories.map((category) => (
-                    <TouchableOpacity
-                      key={category.id}
-                      style={[
-                        styles.categoryChip,
-                        { 
-                          backgroundColor: selectedCategory === category.id ? category.color : colors.categoryBg,
-                          borderColor: category.color 
-                        }
-                      ]}
-                      onPress={() => setSelectedCategory(category.id)}
-                    >
-                      <Text style={[
-                        styles.categoryChipText,
-                        { color: selectedCategory === category.id ? '#fff' : category.color }
-                      ]}>
-                        {category.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+              {/* Categories */}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Category</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoriesContainer}
+                keyboardShouldPersistTaps="handled"
+              >
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryChip,
+                      { 
+                        backgroundColor: selectedCategory === category.id ? category.color : colors.categoryBg,
+                        borderColor: category.color 
+                      }
+                    ]}
+                    onPress={() => setSelectedCategory(category.id)}
+                  >
+                    <Text style={[
+                      styles.categoryChipText,
+                      { color: selectedCategory === category.id ? '#fff' : category.color }
+                    ]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
+              <TouchableOpacity 
+                style={[styles.checkboxContainer, { backgroundColor: colors.searchBar }]}
+                onPress={() => setSaveToDevice(!saveToDevice)}
+              >
+                <View style={[
+                  styles.checkbox,
+                  { 
+                    backgroundColor: saveToDevice ? colors.selectedCategory : 'transparent',
+                    borderColor: saveToDevice ? colors.selectedCategory : colors.secondaryText
+                  }
+                ]}>
+                  {saveToDevice && <Ionicons name="checkmark" size={16} color="#fff" />}
+                </View>
+                <View style={styles.checkboxTextContainer}>
+                  <Text style={[styles.checkboxLabel, { color: colors.text }]}>
+                    Also save to device contacts
+                  </Text>
+                  <Text style={[styles.checkboxDescription, { color: colors.secondaryText }]}>
+                    This contact will be saved to your device's contact list and will be available in your phone's default contacts app
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={[styles.inputContainer, { backgroundColor: colors.searchBar }]}>
                   <Text style={[styles.label, { color: colors.secondaryText }]}>Notes</Text>
                   <TextInput
@@ -188,29 +264,29 @@ export default function NewContact() {
                     textAlignVertical="top"
                   />
                 </View>
-              </View>
-            </ScrollView>
-
-            {/* Save Button */}
-            <View style={[styles.saveButtonContainer, { backgroundColor: colors.background }]}>
-              <TouchableOpacity 
-                onPress={handleSave}
-                disabled={!name.trim() || loading}
-                style={[
-                  styles.saveButtonLarge,
-                  { 
-                    backgroundColor: colors.selectedCategory,
-                    opacity: !name.trim() || loading ? 0.5 : 1 
-                  }
-                ]}
-              >
-                <Text style={styles.saveButtonLargeText}>
-                  {loading ? 'Saving...' : 'Save Contact'}
-                </Text>
-              </TouchableOpacity>
+              </TouchableWithoutFeedback>
             </View>
+          </ScrollView>
+
+          {/* Save Button */}
+          <View style={[styles.saveButtonContainer, { backgroundColor: colors.background }]}>
+            <TouchableOpacity 
+              onPress={handleSave}
+              disabled={!name.trim() || loading}
+              style={[
+                styles.saveButtonLarge,
+                { 
+                  backgroundColor: colors.selectedCategory,
+                  opacity: !name.trim() || loading ? 0.5 : 1 
+                }
+              ]}
+            >
+              <Text style={styles.saveButtonLargeText}>
+                {loading ? 'Saving...' : 'Save Contact'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -258,7 +334,8 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   label: {
     fontSize: 13,
@@ -267,7 +344,8 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 17,
-    padding: 0,
+    paddingTop: 5,
+    paddingBottom: 5,
   },
   notesInput: {
     height: 100,
@@ -308,5 +386,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  checkboxTextContainer: {
+    flex: 1,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  checkboxDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 }); 

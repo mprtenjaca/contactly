@@ -5,6 +5,8 @@ import * as SecureStore from 'expo-secure-store';
 import { saveUserToLocal } from '../services/DatabaseService';
 import LoadingScreen from '../components/LoadingScreen';
 import { offlineManager } from '../services/OfflineManager';
+import { splitSessionData } from '../services/AuthService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const AuthContext = createContext<{
   session: Session | null;
@@ -38,8 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('Got current session from Supabase');
           if (isMounted) {
             setSession(currentSession);
-            // Store session for offline use
-            await SecureStore.setItemAsync('supabase.session', JSON.stringify(currentSession));
+            // Split and store session data
+            const { sensitive, nonSensitive } = splitSessionData(currentSession);
+            await SecureStore.setItemAsync('supabase.sensitive.session', JSON.stringify(sensitive));
+            await AsyncStorage.setItem('supabase.session', JSON.stringify(nonSensitive));
           }
         } else {
           console.log('No current session');
@@ -50,7 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Error in auth initialization:', error);
         // Clear any invalid session
-        await SecureStore.deleteItemAsync('supabase.session');
+        await SecureStore.deleteItemAsync('supabase.sensitive.session');
+        await AsyncStorage.removeItem('supabase.session');
         if (isMounted) {
           setSession(null);
         }
@@ -69,11 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentSession) {
           console.log('New session available');
           setSession(currentSession);
-          await SecureStore.setItemAsync('supabase.session', JSON.stringify(currentSession));
+          // Split and store session data
+          const { sensitive, nonSensitive } = splitSessionData(currentSession);
+          await SecureStore.setItemAsync('supabase.sensitive.session', JSON.stringify(sensitive));
+          await AsyncStorage.setItem('supabase.session', JSON.stringify(nonSensitive));
         } else {
           console.log('Session cleared');
           setSession(null);
-          await SecureStore.deleteItemAsync('supabase.session');
+          await SecureStore.deleteItemAsync('supabase.sensitive.session');
+          await AsyncStorage.removeItem('supabase.session');
         }
       }
     );

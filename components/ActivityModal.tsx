@@ -208,29 +208,32 @@ export default function ActivityModal({
       fontSize: 16,
       fontWeight: '600',
     },
+    buttonContainer: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
     saveButton: {
+      flex: 1,
       padding: 16,
       borderRadius: 8,
       alignItems: 'center',
-      marginTop: 8,
     },
     saveButtonText: {
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
     },
-    buttonContainer: {
-      gap: 12,
-      marginTop: 24,
-    },
     deleteButton: {
+      flex: 1,
       padding: 16,
       borderRadius: 8,
       alignItems: 'center',
-      backgroundColor: '#dc3545',
+      borderWidth: 1,
+      borderColor: '#dc3545',
     },
     deleteButtonText: {
-      color: '#fff',
+      color: '#dc3545',
       fontSize: 16,
       fontWeight: '600',
     },
@@ -391,15 +394,6 @@ export default function ActivityModal({
                     </ScrollView>
 
                     <View style={styles.buttonContainer}>
-                      <TouchableOpacity
-                        style={[styles.saveButton, { backgroundColor: colors.selectedCategory }]}
-                        onPress={() => onSave(type, date, notes)}
-                      >
-                        <Text style={styles.saveButtonText}>
-                          {activity ? 'Save Changes' : 'Add Activity'}
-                        </Text>
-                      </TouchableOpacity>
-
                       {activity && onDelete && (
                         <TouchableOpacity
                           style={styles.deleteButton}
@@ -411,6 +405,14 @@ export default function ActivityModal({
                           <Text style={styles.deleteButtonText}>Delete Activity</Text>
                         </TouchableOpacity>
                       )}
+                      <TouchableOpacity
+                        style={[styles.saveButton, { backgroundColor: colors.selectedCategory }]}
+                        onPress={() => onSave(type, date, notes)}
+                      >
+                        <Text style={styles.saveButtonText}>
+                          {activity ? 'Save Changes' : 'Add Activity'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </>
                 )}

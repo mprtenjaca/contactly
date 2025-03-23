@@ -625,3 +625,37 @@ export const updateContact = async (contact: {
     throw error;
   }
 };
+
+export const deleteContact = async (contactId: string, userId: string) => {
+  try {
+    const database = await getDb();
+    
+    // First get all activities for this contact
+    const activities: Activity[] = await database.getAllAsync(
+      'SELECT id FROM activities WHERE contactId = ? AND user_id = ?;',
+      [contactId, userId]
+    );
+    
+    // Cancel notifications for each activity
+    for (const activity of activities) {
+      console.log('Cancelling notifications for activity:', activity.id);
+      await cancelScheduledNotificationsForActivity(activity.id);
+    }
+    
+    // Then delete all activities associated with this contact
+    await database.runAsync(
+      'DELETE FROM activities WHERE contactId = ? AND user_id = ?;',
+      [contactId, userId]
+    );
+    
+    // Finally delete the contact
+    await database.runAsync(
+      'DELETE FROM contacts WHERE id = ? AND user_id = ?;',
+      [contactId, userId]
+    );
+    
+  } catch (error) {
+    console.error('Error deleting contact:', error);
+    throw error;
+  }
+};

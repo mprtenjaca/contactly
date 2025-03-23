@@ -11,6 +11,7 @@ import {
   Switch,
   Image,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -19,9 +20,26 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../services/AuthService';
 import { offlineManager } from '../../services/OfflineManager';
 import EditProfileModal from '../EditProfileModal';
-import { getLocalUser, saveUserToLocal, getAllContacts, importContacts, Contact } from '../../services/DatabaseService';
+import { 
+  getLocalUser, 
+  saveUserToLocal, 
+  getAllContacts, 
+  importContacts, 
+  Contact, 
+  getFutureActivities,
+  getPastActivities,
+  saveContact,
+  saveActivity
+} from '../../services/DatabaseService';
 import * as SecureStore from 'expo-secure-store';
 import * as Contacts from 'expo-contacts';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Activity } from '@/services/ActivityService';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Print from 'expo-print';
+import { format } from 'date-fns';
+import * as Clipboard from 'expo-clipboard';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -43,6 +61,19 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [showDataModal, setShowDataModal] = useState(false);
+  const [activityStats, setActivityStats] = useState<{
+    total: number;
+    byType: { [key: string]: number };
+    byMonth: { [key: string]: number };
+  }>({ total: 0, byType: {}, byMonth: {} });
+  const [backupEnabled, setBackupEnabled] = useState(false);
+  const [lastBackupDate, setLastBackupDate] = useState<string | null>(null);
+  const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
+  const [archivedActivities, setArchivedActivities] = useState<Activity[]>([]);
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'in_progress' | 'completed' | 'failed'>('idle');
+  const [showBackupHistoryModal, setShowBackupHistoryModal] = useState(false);
+  const [backupHistory, setBackupHistory] = useState<any[]>([]);
 
   useEffect(() => {
     loadUserProfile();
@@ -284,6 +315,525 @@ export default function ProfileScreen() {
     );
   };
 
+  const exportActivitiesToCSV = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Get both future and past activities
+      const futureActivities = await getFutureActivities(user.id);
+      const pastActivities = await getPastActivities(user.id);
+      const allActivities = [...futureActivities, ...pastActivities];
+      
+      // Create CSV content
+      const csvHeader = 'Type,Contact,Date,Notes\n';
+      const csvContent = allActivities.map((activity: Activity) => {
+        return `${activity.type},"${activity.contactName}","${new Date(activity.date).toLocaleString()}","${activity.notes || ''}"`
+      }).join('\n');
+      
+      const csvString = csvHeader + csvContent;
+      const fileName = `activities_${new Date().toISOString().split('T')[0]}.csv`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+      
+      await FileSystem.writeAsStringAsync(filePath, csvString);
+      await Sharing.shareAsync(filePath);
+    } catch (error) {
+      console.error('Error exporting activities:', error);
+      Alert.alert('Error', 'Failed to export activities');
+    }
+  };
+
+  const loadActivityStats = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Get both future and past activities
+      const futureActivities = await getFutureActivities(user.id);
+      const pastActivities = await getPastActivities(user.id);
+      const allActivities = [...futureActivities, ...pastActivities];
+      
+      // Calculate statistics
+      const byType = allActivities.reduce((acc: { [key: string]: number }, activity: Activity) => {
+        acc[activity.type] = (acc[activity.type] || 0) + 1;
+        return acc;
+      }, {});
+
+      const byMonth = allActivities.reduce((acc: { [key: string]: number }, activity: Activity) => {
+        const month = new Date(activity.date).toLocaleString('default', { month: 'short' });
+        acc[month] = (acc[month] || 0) + 1;
+        return acc;
+      }, {});
+
+      setActivityStats({
+        total: allActivities.length,
+        byType,
+        byMonth
+      });
+    } catch (error) {
+      console.error('Error loading activity stats:', error);
+    }
+  };
+
+  const exportActivitiesToPDF = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      const futureActivities = await getFutureActivities(user.id);
+      const pastActivities = await getPastActivities(user.id);
+      const allActivities = [...futureActivities, ...pastActivities];
+
+      // Create HTML content for PDF
+      const htmlContent = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica'; padding: 20px; }
+              h1 { color: #2196F3; }
+              .activity { border-bottom: 1px solid #eee; padding: 10px 0; }
+              .date { color: #666; }
+            </style>
+          </head>
+          <body>
+            <h1>Activity Report</h1>
+            <p>Generated on ${new Date().toLocaleDateString()}</p>
+            ${allActivities.map(activity => `
+              <div class="activity">
+                <h3>${activity.type} with ${activity.contactName}</h3>
+                <p class="date">${format(new Date(activity.date), 'PPP')}</p>
+                ${activity.notes ? `<p>${activity.notes}</p>` : ''}
+              </div>
+            `).join('')}
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false
+      });
+
+      await Sharing.shareAsync(uri, {
+        UTI: 'com.adobe.pdf',
+        mimeType: 'application/pdf'
+      });
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      Alert.alert('Error', 'Failed to export PDF');
+    }
+  };
+
+  const toggleAutoBackup = async (enabled: boolean) => {
+    try {
+      await SecureStore.setItemAsync('autoBackupEnabled', enabled.toString());
+      setBackupEnabled(enabled);
+      if (enabled) {
+        await performBackup();
+      }
+    } catch (error) {
+      console.error('Error toggling backup:', error);
+      Alert.alert('Error', 'Failed to update backup settings');
+    }
+  };
+
+  const performBackup = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      setBackupStatus('in_progress');
+
+      // Backup activities and contacts to Supabase
+      const futureActivities = await getFutureActivities(user.id);
+      const pastActivities = await getPastActivities(user.id);
+      const contacts = await getAllContacts(user.id);
+
+      const activitiesData = [...futureActivities, ...pastActivities];
+      const backupData = {
+        user_id: user.id,
+        activities: activitiesData,
+        contacts: contacts,
+        backup_type: 'manual',
+        backup_size: JSON.stringify(activitiesData).length + JSON.stringify(contacts).length,
+        status: 'completed'
+      };
+
+      const { error } = await supabase
+        .from('backups')
+        .insert(backupData);
+
+      if (error) throw error;
+
+      const backupDate = new Date().toLocaleString();
+      await SecureStore.setItemAsync('lastBackupDate', backupDate);
+      setLastBackupDate(backupDate);
+      setBackupStatus('completed');
+      
+      Alert.alert('Success', 'Backup completed successfully');
+    } catch (error) {
+      console.error('Error performing backup:', error);
+      setBackupStatus('failed');
+      Alert.alert('Error', 'Failed to perform backup');
+    }
+  };
+
+  const restoreFromBackup = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Get the latest backup
+      const { data: latestBackup, error } = await supabase
+        .from('backups')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+      if (!latestBackup) {
+        Alert.alert('No Backup', 'No backup found to restore from');
+        return;
+      }
+
+      // Directly restore all data
+      await restoreSpecificData(latestBackup, 'all');
+    } catch (error) {
+      console.error('Error restoring backup:', error);
+      Alert.alert('Error', 'Failed to restore backup');
+    }
+  };
+
+  const importFromFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'application/json']
+      });
+
+      if (result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        const fileContent = await FileSystem.readAsStringAsync(file.uri);
+        
+        // Parse the file content based on file type
+        if (file.name.endsWith('.csv')) {
+          // Parse CSV
+          const rows = fileContent.split('\n').map(row => row.split(','));
+          // Process the data...
+        } else if (file.name.endsWith('.json')) {
+          // Parse JSON
+          const data = JSON.parse(fileContent);
+          // Process the data...
+        }
+
+        Alert.alert('Success', 'Data imported successfully');
+      }
+    } catch (error) {
+      console.error('Error importing file:', error);
+      Alert.alert('Error', 'Failed to import file');
+    }
+  };
+
+  const viewBackupHistory = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      const { data: backups, error } = await supabase
+        .from('backups')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      if (!backups?.length) {
+        Alert.alert('No Backups', 'No backup history found');
+        return;
+      }
+
+      // Show backup history in a modal
+      setBackupHistory(backups);
+      setShowBackupHistoryModal(true);
+    } catch (error) {
+      console.error('Error fetching backup history:', error);
+      Alert.alert('Error', 'Failed to fetch backup history');
+    }
+  };
+
+  const generateBackupCode = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Get latest backup
+      const { data: latestBackup } = await supabase
+        .from('backups')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!latestBackup) {
+        Alert.alert('No Backup', 'Please create a backup first');
+        return;
+      }
+
+      // Generate a temporary access code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Store the code with backup reference
+      await supabase
+        .from('backup_codes')
+        .insert({
+          code,
+          backup_id: latestBackup.id,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        });
+
+      Alert.alert(
+        'Backup Code',
+        `Your backup code is: ${code}\nThis code will expire in 24 hours.`,
+        [
+          {
+            text: 'Copy Code',
+            onPress: () => Clipboard.setString(code)
+          },
+          { text: 'OK' }
+        ]
+      );
+    } catch (error) {
+      console.error('Error generating backup code:', error);
+      Alert.alert('Error', 'Failed to generate backup code');
+    }
+  };
+
+  const handleSelectiveRestore = async (backup: any) => {
+    Alert.alert(
+      'Restore Options',
+      'What would you like to restore?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Contacts Only',
+          onPress: () => restoreSpecificData(backup, 'contacts')
+        },
+        {
+          text: 'Activities Only',
+          onPress: () => restoreSpecificData(backup, 'activities')
+        },
+        {
+          text: 'Everything',
+          onPress: () => restoreSpecificData(backup, 'all')
+        }
+      ]
+    );
+  };
+
+  const restoreSpecificData = async (backup: any, type: 'contacts' | 'activities' | 'all') => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Show loading alert without any buttons
+      Alert.alert(
+        'Restoring',
+        'Please wait while we restore your data...',
+        [],
+        { cancelable: false }
+      );
+
+      if (type === 'all' || type === 'contacts') {
+        // Restore contacts
+        const contacts = backup.contacts || [];
+        for (const contact of contacts) {
+          // Convert the contact data to match the Contact interface
+          const contactToRestore: Contact = {
+            id: contact.id,
+            name: contact.name,
+            phoneNumbers: contact.phoneNumbers || [],
+            email: contact.email || '',
+            category: contact.category || '',
+            notes: contact.notes || ''
+          };
+          // Save to SQLite database
+          await saveContact(contactToRestore, user.id);
+        }
+      }
+
+      if (type === 'all' || type === 'activities') {
+        // Restore activities
+        const activities = backup.activities || [];
+        for (const activity of activities) {
+          // Convert the activity data to match the Activity interface
+          const activityToRestore: Activity = {
+            id: activity.id,
+            type: activity.type,
+            date: new Date(activity.date),
+            notes: activity.notes || '',
+            contactId: activity.contactId,
+            contactName: activity.contactName
+          };
+          // Save to SQLite database
+          await saveActivity(activityToRestore, user.id);
+        }
+      }
+
+      // Update local storage with the restored data
+      if (type === 'all' || type === 'activities') {
+        const futureActivities = await getFutureActivities(user.id);
+        const pastActivities = await getPastActivities(user.id);
+        // await SecureStore.setItemAsync('futureActivities', JSON.stringify(futureActivities));
+        // await SecureStore.setItemAsync('pastActivities', JSON.stringify(pastActivities));
+      }
+
+      if (type === 'all' || type === 'contacts') {
+        const contacts = await getAllContacts(user.id);
+        // await SecureStore.setItemAsync('contacts', JSON.stringify(contacts));
+      }
+
+      Alert.alert(
+        'Success',
+        `Successfully restored ${type === 'all' ? 'all data' : type} from backup`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Refresh the app or navigate to home screen
+              router.replace('/');
+            }
+          }
+        ],
+        { cancelable: false }
+      );
+    } catch (error) {
+      console.error('Error restoring data:', error);
+      // Dismiss the loading alert by showing an empty alert
+      Alert.alert('', '', [], { cancelable: false });
+      
+      Alert.alert(
+        'Error',
+        'Failed to restore data from backup',
+        [{ text: 'OK' }],
+        { cancelable: false }
+      );
+    }
+  };
+
+  const restoreFromCode = async () => {
+    try {
+      Alert.prompt(
+        'Enter Backup Code',
+        'Please enter the 6-character backup code you received',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Restore',
+            onPress: async (code) => {
+              if (!code) return;
+
+              // Show loading alert
+              Alert.alert(
+                'Verifying Code',
+                'Please wait while we verify your backup code...',
+                [],
+                { cancelable: false }
+              );
+
+              // Verify the code and get backup data
+              const { data: backupCode, error: codeError } = await supabase
+                .from('backup_codes')
+                .select('backup_id, expires_at')
+                .eq('code', code.toUpperCase())
+                .single();
+
+              if (codeError || !backupCode) {
+                Alert.alert('', '', [], { cancelable: false }); // Dismiss loading
+                Alert.alert('Error', 'Invalid or expired backup code');
+                return;
+              }
+
+              // Check if code is expired
+              if (new Date(backupCode.expires_at) < new Date()) {
+                Alert.alert('', '', [], { cancelable: false }); // Dismiss loading
+                Alert.alert('Error', 'This backup code has expired');
+                return;
+              }
+
+              // Get the backup data
+              const { data: backup, error: backupError } = await supabase
+                .from('backups')
+                .select('*')
+                .eq('id', backupCode.backup_id)
+                .single();
+
+              if (backupError || !backup) {
+                Alert.alert('', '', [], { cancelable: false }); // Dismiss loading
+                Alert.alert('Error', 'Backup not found');
+                return;
+              }
+
+              // Restore the data
+              await restoreSpecificData(backup, 'all');
+            }
+          }
+        ],
+        'plain-text'
+      );
+    } catch (error) {
+      console.error('Error restoring from code:', error);
+      Alert.alert('Error', 'Failed to restore from backup code');
+    }
+  };
+
+  const renderBackupHistoryModal = () => (
+    <Modal
+      visible={showBackupHistoryModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowBackupHistoryModal(false)}
+    >
+      <View style={[styles.dataModalContainer, { backgroundColor: colors.background }]}>
+        <View style={styles.dataModalHeader}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Backup History</Text>
+          <TouchableOpacity onPress={() => setShowBackupHistoryModal(false)}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.dataModalContent}>
+          {backupHistory.map((backup) => (
+            <TouchableOpacity 
+              key={backup.id}
+              style={styles.backupHistoryItem}
+              onPress={() => handleSelectiveRestore(backup)}
+            >
+              <View>
+                <Text style={[styles.backupDate, { color: colors.text }]}>
+                  {new Date(backup.created_at).toLocaleString()}
+                </Text>
+                <Text style={[styles.backupInfo, { color: colors.secondaryText }]}>
+                  {backup.activities.length} activities, {backup.contacts.length} contacts
+                </Text>
+              </View>
+              <Ionicons name="refresh" size={24} color={colors.selectedCategory} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -429,7 +979,154 @@ export default function ProfileScreen() {
       fontSize: 14,
       marginTop: 16,
     },
+    dataModalContainer: {
+      flex: 1,
+      marginTop: 50,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    },
+    dataModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.separator,
+    },
+    dataModalContent: {
+      flex: 1,
+      padding: 20,
+    },
+    statsContainer: {
+      padding: 16,
+    },
+    statsTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 24,
+      textAlign: 'center',
+    },
+    statsSubtitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      marginBottom: 16,
+    },
+    statRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
+    },
+    statLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    statText: {
+      fontSize: 16,
+    },
+    statCount: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 16,
+      textAlign: 'center',
+      color: colors.text,
+    },
+    backupHistoryItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
+    },
+    backupDate: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    backupInfo: {
+      fontSize: 14,
+    },
   });
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'call': return 'call';
+      case 'message': return 'chatbubble';
+      case 'meeting': return 'people';
+      case 'note': return 'document-text';
+      case 'email': return 'mail';
+      case 'whatsapp': return 'logo-whatsapp';
+      default: return 'alert-circle';
+    }
+  };
+
+  const renderDataModal = () => (
+    <Modal
+      visible={showDataModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowDataModal(false)}
+    >
+      <View style={[styles.dataModalContainer, { backgroundColor: colors.background }]}>
+        <View style={styles.dataModalHeader}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Activity Statistics</Text>
+          <TouchableOpacity onPress={() => setShowDataModal(false)}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.dataModalContent}>
+          <View style={styles.statsContainer}>
+            <Text style={[styles.statsTitle, { color: colors.text }]}>
+              Total Activities: {activityStats.total}
+            </Text>
+
+            <Text style={[styles.statsSubtitle, { color: colors.text }]}>
+              Activities by Type
+            </Text>
+            {Object.entries(activityStats.byType).map(([type, count]) => (
+              <View key={type} style={styles.statRow}>
+                <View style={styles.statLabel}>
+                  <Ionicons 
+                    name={getActivityIcon(type as any)} 
+                    size={20} 
+                    color={colors.selectedCategory} 
+                  />
+                  <Text style={[styles.statText, { color: colors.text }]}>
+                    {type}
+                  </Text>
+                </View>
+                <Text style={[styles.statCount, { color: colors.selectedCategory }]}>
+                  {count}
+                </Text>
+              </View>
+            ))}
+
+            <Text style={[styles.statsSubtitle, { color: colors.text, marginTop: 20 }]}>
+              Monthly Activity
+            </Text>
+            {Object.entries(activityStats.byMonth).map(([month, count]) => (
+              <View key={month} style={styles.statRow}>
+                <Text style={[styles.statText, { color: colors.text }]}>
+                  {month}
+                </Text>
+                <Text style={[styles.statCount, { color: colors.selectedCategory }]}>
+                  {count}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
 
   if (isLoading) {
     return (
@@ -533,6 +1230,129 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Data & Backup</Text>
+          <View style={styles.card}>
+            {/* <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Automatic Backup</Text>
+              <Switch
+                value={backupEnabled}
+                onValueChange={toggleAutoBackup}
+                trackColor={{ false: '#767577', true: colors.selectedCategory + '80' }}
+                thumbColor={backupEnabled ? colors.selectedCategory : '#f4f3f4'}
+              />
+            </View> */}
+            
+            {lastBackupDate && (
+              <Text style={[styles.settingValue, { fontSize: 12, marginTop: -8, marginBottom: 8 }]}>
+                Last backup: {lastBackupDate}
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={performBackup}
+              disabled={backupStatus === 'in_progress'}
+            >
+              <Text style={styles.settingLabel}>Backup Now</Text>
+              <View style={styles.settingIcon}>
+                {backupStatus === 'in_progress' ? (
+                  <ActivityIndicator size="small" color={colors.selectedCategory} />
+                ) : (
+                  <Ionicons 
+                    name={backupStatus === 'failed' ? "alert-circle" : "cloud-upload-outline"} 
+                    size={24} 
+                    color={backupStatus === 'failed' ? colors.error : colors.selectedCategory} 
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={restoreFromBackup}
+            >
+              <Text style={styles.settingLabel}>Restore from Backup</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="cloud-download-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={exportActivitiesToCSV}
+            >
+              <Text style={styles.settingLabel}>Export Activities (CSV)</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="download-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={exportActivitiesToPDF}
+            >
+              <Text style={styles.settingLabel}>Export Activities (PDF)</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="document-text-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity>
+
+            {/* <TouchableOpacity
+              style={styles.settingRow}
+              onPress={importFromFile}
+            >
+              <Text style={styles.settingLabel}>Import Data</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="cloud-upload-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity> */}
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => {
+                loadActivityStats();
+                setShowDataModal(true);
+              }}
+            >
+              <Text style={styles.settingLabel}>View Statistics</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="bar-chart-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={viewBackupHistory}
+            >
+              <Text style={styles.settingLabel}>Backup History</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="time-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity>
+
+            {/* <TouchableOpacity
+              style={styles.settingRow}
+              onPress={generateBackupCode}
+            >
+              <Text style={styles.settingLabel}>Generate Backup Code</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="key-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity> */}
+
+            {/* <TouchableOpacity
+              style={styles.settingRow}
+              onPress={restoreFromCode}
+            >
+              <Text style={styles.settingLabel}>Restore from Backup Code</Text>
+              <View style={styles.settingIcon}>
+                <Ionicons name="key-outline" size={24} color={colors.selectedCategory} />
+              </View>
+            </TouchableOpacity> */}
+          </View>
+        </View>
+
         <TouchableOpacity 
           style={styles.logoutButton} 
           onPress={handleLogout}
@@ -551,6 +1371,8 @@ export default function ProfileScreen() {
         initialFirstName={user?.firstName || ''}
         initialLastName={user?.lastName || ''}
       />
+      {renderDataModal()}
+      {renderBackupHistoryModal()}
     </SafeAreaView>
   );
 } 

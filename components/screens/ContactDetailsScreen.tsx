@@ -36,7 +36,8 @@ import {
   updateContactCategory, 
   updateContactNotes,
   deleteActivity,
-  getAllCategories
+  getAllCategories,
+  deleteContact
 } from '../../services/DatabaseService';
 import { getCurrentUser } from '../../services/AuthService';
 import { registerForPushNotificationsAsync } from '../../services/NotificationService';
@@ -44,6 +45,7 @@ import { savePushToken } from '../../services/SupabaseService';
 import { scheduleActivityNotification } from '../../services/NotificationService';
 import { cancelScheduledNotificationsForActivity, scheduleNotificationsForActivity } from '../../services/NotificationService';
 import { openInbox, openComposer } from 'react-native-email-link';
+import Checkbox from 'expo-checkbox';
 
 interface Activity {
   id: string;
@@ -76,17 +78,22 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    position: 'relative',
   },
   backButton: {
     padding: 8,
     marginLeft: -8,
+    position: 'absolute',
+    left: 16,
+    zIndex: 1,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
   },
   saveButton: {
     padding: 8,
@@ -288,6 +295,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 12,
   },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  checkboxHint: {
+    fontSize: 12,
+    marginLeft: 32,
+  },
+  menuModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  menuModal: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    width: 200,
+  },
+  menuModalHeader: {
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  menuModalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  menuIcon: {
+    marginRight: 12,
+  },
+  menuText: {
+    fontSize: 17,
+  },
 });
 
 export default function ContactDetailsScreen({ contact }: { contact: Contact }) {
@@ -324,6 +374,8 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
   const [email, setEmail] = useState(contact?.email || '');
   const [tempEmail, setTempEmail] = useState(contact?.email || '');
   const [emailError, setEmailError] = useState('');
+  const [updateDeviceContact, setUpdateDeviceContact] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
   
   useEffect(() => {
     loadContactData();
@@ -355,7 +407,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
           // Small delay to ensure the app is fully active
           setTimeout(() => {
             handleQuickLog();
-          }, 500);
+          }, 200);
         }
       }
       appState.current = nextAppState;
@@ -513,6 +565,19 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
         return;
       }
 
+      // Update device contact if checkbox is checked
+      if (updateDeviceContact) {
+        try {
+          await updateDeviceContactName(contact.id, name);
+        } catch (error) {
+          Alert.alert(
+            'Warning',
+            'Failed to update device contact, but will continue updating in app.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+
       const updatedContact = {
         ...contact,
         name: name.trim(),
@@ -527,7 +592,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
       
       setName(name);
       setPhoneNumber(phoneNumber);
-      setEmail(tempEmail); // Update the actual email only after successful save
+      setEmail(tempEmail);
       setShowEditModal(false);
 
       // If name has changed, update all activities for this contact
@@ -549,6 +614,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
       Alert.alert('Error', 'Failed to update contact');
     } finally {
       setSaving(false);
+      setUpdateDeviceContact(false); // Reset checkbox state
     }
   };
 
@@ -591,7 +657,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
     );
   };
 
-  const handleSaveActivity = async (type: ActivityType, date: Date, notes: string) => {
+  const handleSaveActivity = async (type: ActivityType, date: Date, notes: string = '') => {
     try {
       const user = await getCurrentUser();
       if (!user) return;
@@ -718,14 +784,10 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
                 )}
               </View>
               <TouchableOpacity 
-                onPress={() => {
-                  setTempEmail(email);
-                  setEmailError('');
-                  setShowEditModal(true);
-                }}
+                onPress={() => setShowMenuModal(true)}
                 style={styles.editButton}
               >
-                <Ionicons name="pencil" size={20} color={colors.selectedCategory} />
+                <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1044,6 +1106,136 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
     setIsMenuOpen(!isMenuOpen);
   };
 
+  const updateDeviceContactName = async (contactId: string, newName: string) => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your contacts to update them.');
+        return;
+      }
+
+      const contact = await Contacts.getContactByIdAsync(contactId);
+      if (!contact) {
+        throw new Error('Contact not found on device');
+      }
+
+      // Split the name into first and last name
+      const nameParts = newName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ');
+
+      const contactToUpdate = {
+        [Contacts.Fields.ID]: contactId,
+        [Contacts.Fields.FirstName]: firstName,
+        [Contacts.Fields.LastName]: lastName,
+        [Contacts.Fields.Name]: newName,
+      };
+
+      await Contacts.updateContactAsync(contactToUpdate as any);
+    } catch (error) {
+      console.error('Error updating device contact:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteContact = async () => {
+    if (!contact?.id) {
+      console.error('Contact ID is missing');
+      return;
+    }
+
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      // Check if contact exists in device contacts
+      const { status } = await Contacts.requestPermissionsAsync();
+      let deviceContactExists = false;
+      if (status === 'granted') {
+        try {
+          const deviceContact = await Contacts.getContactByIdAsync(contact.id);
+          deviceContactExists = !!deviceContact;
+        } catch (error) {
+          console.error('Error checking device contact:', error);
+        }
+      }
+
+      // Show appropriate alert based on whether contact exists in device
+      if (deviceContactExists) {
+        Alert.alert(
+          "Delete Contact",
+          "Do you want to delete this contact from your device contacts as well?",
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "App Only",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await deleteContact(contact.id, user.id);
+                  router.back();
+                } catch (error) {
+                  console.error('Error deleting contact:', error);
+                  Alert.alert('Error', 'Failed to delete contact');
+                }
+              }
+            },
+            {
+              text: "Both",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  // Delete from device contacts
+                  const deviceContact = await Contacts.getContactByIdAsync(contact.id);
+                  if (deviceContact?.id) {
+                    await Contacts.removeContactAsync(deviceContact.id);
+                  }
+                  
+                  // Delete from app database
+                  await deleteContact(contact.id, user.id);
+                  router.back();
+                } catch (error) {
+                  console.error('Error deleting contact:', error);
+                  Alert.alert('Error', 'Failed to delete contact');
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Delete Contact",
+          "Are you sure you want to delete this contact?",
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await deleteContact(contact.id, user.id);
+                  router.back();
+                } catch (error) {
+                  console.error('Error deleting contact:', error);
+                  Alert.alert('Error', 'Failed to delete contact');
+                }
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking contact:', error);
+      Alert.alert('Error', 'Failed to check contact status');
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { 
@@ -1078,23 +1270,6 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Contact Details</Text>
-        {/* Empty space to adjust the position of the title */}
-        <TouchableOpacity></TouchableOpacity>
-        {/* <TouchableOpacity 
-          style={[styles.saveButton, hasChanges && { backgroundColor: colors.selectedCategory, borderRadius: 8 }]}
-          onPress={handleSave}
-          disabled={isSaving || !hasChanges}
-        >
-          <Text style={[
-            styles.saveButtonText, 
-            { 
-              color: hasChanges ? '#fff' : colors.selectedCategory,
-              opacity: isSaving ? 0.5 : 1 
-            }
-          ]}>
-            {isSaving ? 'Saving...' : 'Save'}
-          </Text>
-        </TouchableOpacity> */}
       </View>
 
       <SectionList
@@ -1104,6 +1279,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
         renderSectionHeader={() => null}
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       />
 
       <Modal
@@ -1136,7 +1312,10 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
                     </TouchableOpacity>
                   </View>
 
-                  <ScrollView style={styles.modalBody}>
+                  <ScrollView 
+                    style={styles.modalBody}
+                    keyboardShouldPersistTaps="always"
+                  >
                     <View style={styles.inputContainer}>
                       <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>Name</Text>
                       <TextInput
@@ -1190,6 +1369,22 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
                           {emailError}
                         </Text>
                       ) : null}
+                    </View>
+
+                    <View style={[styles.inputContainer, { marginTop: 16 }]}>
+                      <View style={styles.checkboxContainer}>
+                        <Checkbox
+                          value={updateDeviceContact}
+                          onValueChange={setUpdateDeviceContact}
+                          color={updateDeviceContact ? colors.selectedCategory : undefined}
+                        />
+                        <Text style={[styles.checkboxLabel, { color: colors.text }]}>
+                          Also update in device contacts
+                        </Text>
+                      </View>
+                      <Text style={[styles.checkboxHint, { color: colors.secondaryText }]}>
+                        This will update the contact's name in your phone's contacts app
+                      </Text>
                     </View>
                   </ScrollView>
 
@@ -1379,6 +1574,54 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
           </KeyboardAvoidingView>
         </>
       )}
+
+      <Modal
+        visible={showMenuModal}
+        transparent
+        onRequestClose={() => setShowMenuModal(false)}
+      >
+        <TouchableOpacity 
+          style={[styles.menuModalOverlay]}
+          activeOpacity={1}
+          onPress={() => setShowMenuModal(false)}
+        >
+          <View style={[styles.menuModal, { 
+            backgroundColor: colors.background,
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 2,
+            },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+            elevation: 5,
+          }]}>
+            <View style={[styles.menuModalHeader, { borderBottomColor: colors.separator }]}>
+              <Text style={[styles.menuModalTitle, { color: colors.text }]}>Contact Options</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenuModal(false);
+                setShowEditModal(true);
+              }}
+            >
+              <Ionicons name="pencil" size={20} color={colors.text} style={styles.menuIcon} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Edit Contact</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.separator }]}
+              onPress={() => {
+                setShowMenuModal(false);
+                handleDeleteContact();
+              }}
+            >
+              <Ionicons name="trash" size={20} color="#FF3B30" style={styles.menuIcon} />
+              <Text style={[styles.menuText, { color: "#FF3B30" }]}>Delete Contact</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 } 
