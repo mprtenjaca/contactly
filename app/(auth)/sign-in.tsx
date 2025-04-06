@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,11 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const passwordInput = useRef<TextInput>(null);
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword(prev => !prev);
+  }, []);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -60,12 +65,16 @@ export default function SignInScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.container, { backgroundColor: colors.background }]}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
+        scrollEnabled={false}
       >
         <View style={styles.logoContainer}>
           <View style={styles.logoRow}>
@@ -86,7 +95,7 @@ export default function SignInScreen() {
             <Ionicons name="mail-outline" size={20} color={colors.secondaryText} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, { 
-                backgroundColor: colors.searchBar,
+                backgroundColor: '#FFFFFF',
                 color: colors.text,
                 borderColor: colors.border
               }]}
@@ -96,14 +105,18 @@ export default function SignInScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => passwordInput.current?.focus()}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed-outline" size={20} color={colors.secondaryText} style={styles.inputIcon} />
             <TextInput
+              ref={passwordInput}
               style={[styles.input, { 
-                backgroundColor: colors.searchBar,
+                backgroundColor: '#FFFFFF',
                 color: colors.text,
                 borderColor: colors.border
               }]}
@@ -112,10 +125,13 @@ export default function SignInScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleSignIn}
             />
             <TouchableOpacity 
-              onPress={() => setShowPassword(!showPassword)}
+              onPress={togglePasswordVisibility}
               style={styles.eyeIcon}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons 
                 name={showPassword ? "eye-off-outline" : "eye-outline"} 
@@ -130,7 +146,7 @@ export default function SignInScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.signInButton, { backgroundColor: colors.selectedCategory }]}
+            style={[styles.signInButton, { backgroundColor: '#1E1E1E' }]}
             onPress={handleSignIn}
             disabled={loading}
           >
@@ -230,17 +246,20 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 50,
-    borderRadius: 8,
+    borderRadius: 0,
     paddingLeft: 40,
     paddingRight: 12,
     fontSize: 16,
-    borderWidth: 1,
+    borderWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E1E1E',
   },
   eyeIcon: {
     position: 'absolute',
     right: 12,
     zIndex: 1,
     padding: 5,
+    backgroundColor: 'transparent',
   },
   errorText: {
     color: '#dc3545',
