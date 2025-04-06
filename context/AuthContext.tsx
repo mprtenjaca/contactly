@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Get current session from Supabase
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        console.log("Current Supabase session:", currentSession);
+        // console.log("Current Supabase session:", currentSession);
 
         if (error) {
           console.error('Error getting Supabase session:', error);
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Add debug logging
   useEffect(() => {
-    console.log('Auth state updated:', { session, isLoading });
+    // console.log('Auth state updated:', { session, isLoading });
   }, [session, isLoading]);
 
   if (isLoading) {

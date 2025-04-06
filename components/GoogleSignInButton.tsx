@@ -5,7 +5,7 @@ export default function GoogleSignInButton({ onPress }: { onPress: () => void })
   return (
     <TouchableOpacity style={styles.button} onPress={onPress}>
       <Image 
-        source={require('../assets/icon.png')} // ISPRAVI
+        source={require('../assets/images/icon.png')} // ISPRAVI
         style={styles.logo}
       />
       <Text style={styles.text}>Continue with Google</Text>

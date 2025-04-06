@@ -1,18 +1,39 @@
 {
   "cli": {
-    "version": ">= 14.7.1",
+    "version": ">= 5.9.1",
     "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "EXPO_CLIENT_SECRET": "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",
+        "EXPO_GOOGLE_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "SUPABASE_URL": "https://tsrlzmeztiolaprisgba.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzcmx6bWV6dGlvbGFwcmlzZ2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0MjYwMzIsImV4cCI6MjA1NDAwMjAzMn0.8VwNVLCognFSIR7JmDdDw1l1HbO1EWpeJHhtx2Se8s4"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "EXPO_CLIENT_SECRET": "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",
+        "EXPO_GOOGLE_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "SUPABASE_URL": "https://tsrlzmeztiolaprisgba.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzcmx6bWV6dGlvbGFwcmlzZ2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0MjYwMzIsImV4cCI6MjA1NDAwMjAzMn0.8VwNVLCognFSIR7JmDdDw1l1HbO1EWpeJHhtx2Se8s4"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "EXPO_CLIENT_SECRET": "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",
+        "EXPO_GOOGLE_CLIENT_ID": "20544217964-d28e895g59vg4fl0epoi2gqa0mmsr4id.apps.googleusercontent.com",
+        "SUPABASE_URL": "https://tsrlzmeztiolaprisgba.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzcmx6bWV6dGlvbGFwcmlzZ2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0MjYwMzIsImV4cCI6MjA1NDAwMjAzMn0.8VwNVLCognFSIR7JmDdDw1l1HbO1EWpeJHhtx2Se8s4"
+      }
     }
   },
   "submit": {

@@ -48,7 +48,7 @@ export default function ActivityModal({
   const [date, setDate] = useState(activity?.date || new Date());
   const [notes, setNotes] = useState(activity?.notes || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [tempDate, setTempDate] = useState(date); // Temporary date for the picker
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const activities: { type: ActivityType; icon: string; label: string }[] = [
     { type: 'call', icon: 'call', label: 'Call' },
@@ -90,14 +90,50 @@ export default function ActivityModal({
     return `${date.toLocaleDateString()} ${timeStr}`;
   };
 
-  const handleDateConfirm = () => {
-    setDate(tempDate);
-    setShowDatePicker(false);
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (selectedDate) {
+        // Preserve the current time when setting new date
+        const currentTime = date.getTime();
+        selectedDate.setTime(currentTime);
+        setDate(selectedDate);
+      }
+    } else {
+      if (selectedDate) {
+        setDate(selectedDate);
+      }
+    }
   };
 
-  const handleDateCancel = () => {
-    setTempDate(date); // Reset temp date
-    setShowDatePicker(false);
+  const handleTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      // Preserve the current date when setting new time
+      const currentDate = date.getDate();
+      const currentMonth = date.getMonth();
+      const currentYear = date.getFullYear();
+      selectedTime.setDate(currentDate);
+      selectedTime.setMonth(currentMonth);
+      selectedTime.setFullYear(currentYear);
+      setDate(selectedTime);
+    }
+  };
+
+  const openDatePicker = () => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(true);
+    } else {
+      setShowDatePicker(true);
+    }
+  };
+
+  const openTimePicker = () => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(true);
+    } else {
+      setShowDatePicker(true);
+    }
   };
 
   const styles = StyleSheet.create({
@@ -270,8 +306,7 @@ export default function ActivityModal({
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalInner}>
               <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                {showDatePicker ? (
-                  // Date Picker View
+                {showDatePicker && Platform.OS === 'ios' ? (
                   <View>
                     <View style={styles.modalHeader}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>Select Date & Time</Text>
@@ -279,14 +314,10 @@ export default function ActivityModal({
                     <View style={[styles.datePickerWrapper, { backgroundColor: colors.categoryBg }]}>
                       <View style={styles.datePickerContent}>
                         <DateTimePicker
-                          value={tempDate}
+                          value={date}
                           mode="datetime"
                           display="spinner"
-                          onChange={(event, selectedDate) => {
-                            if (selectedDate) {
-                              setTempDate(selectedDate);
-                            }
-                          }}
+                          onChange={handleDateChange}
                           textColor={colors.text}
                           themeVariant={theme}
                           style={styles.datePicker}
@@ -296,20 +327,19 @@ export default function ActivityModal({
                     <View style={styles.datePickerButtons}>
                       <TouchableOpacity
                         style={[styles.datePickerButton, { backgroundColor: colors.searchBar }]}
-                        onPress={handleDateCancel}
+                        onPress={() => setShowDatePicker(false)}
                       >
                         <Text style={[styles.datePickerButtonText, { color: colors.text }]}>Cancel</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.datePickerButton, { backgroundColor: colors.selectedCategory }]}
-                        onPress={handleDateConfirm}
+                        onPress={() => setShowDatePicker(false)}
                       >
                         <Text style={[styles.datePickerButtonText, { color: '#fff' }]}>Done</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 ) : (
-                  // Main Activity Form View
                   <>
                     <View style={styles.modalHeader}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>
@@ -355,24 +385,56 @@ export default function ActivityModal({
                       <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>
                         Date & Time
                       </Text>
-                      <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.categoryBg }]}
-                        onPress={() => {
-                          setTempDate(date);
-                          setShowDatePicker(true);
-                        }}
-                      >
-                        <Ionicons name="calendar" size={20} color={colors.text} />
-                        <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                          {formatDate(date)}
-                        </Text>
-                        <Ionicons 
-                          name="chevron-forward" 
-                          size={20} 
-                          color={colors.text} 
-                          style={styles.dateButtonIcon}
-                        />
-                      </TouchableOpacity>
+                      {Platform.OS === 'android' ? (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={[styles.dateButton, { flex: 1, backgroundColor: colors.categoryBg }]}
+                            onPress={openDatePicker}
+                          >
+                            <Ionicons name="calendar" size={20} color={colors.text} />
+                            <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                              {date.toLocaleDateString()}
+                            </Text>
+                            <Ionicons 
+                              name="chevron-forward" 
+                              size={20} 
+                              color={colors.text} 
+                              style={styles.dateButtonIcon}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.dateButton, { flex: 1, backgroundColor: colors.categoryBg }]}
+                            onPress={openTimePicker}
+                          >
+                            <Ionicons name="time" size={20} color={colors.text} />
+                            <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                              {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            <Ionicons 
+                              name="chevron-forward" 
+                              size={20} 
+                              color={colors.text} 
+                              style={styles.dateButtonIcon}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.dateButton, { backgroundColor: colors.categoryBg }]}
+                          onPress={openDatePicker}
+                        >
+                          <Ionicons name="calendar" size={20} color={colors.text} />
+                          <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                            {formatDate(date)}
+                          </Text>
+                          <Ionicons 
+                            name="chevron-forward" 
+                            size={20} 
+                            color={colors.text} 
+                            style={styles.dateButtonIcon}
+                          />
+                        </TouchableOpacity>
+                      )}
 
                       <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>
                         Notes
@@ -421,6 +483,23 @@ export default function ActivityModal({
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+        />
+      )}
+      {showTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={date}
+          mode="time"
+          display="default"
+          textColor="red"
+          onChange={handleTimeChange}
+        />
+      )}
     </Modal>
   );
 } 

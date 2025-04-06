@@ -14,6 +14,7 @@ import {
   SectionList as RNSectionList,
   Dimensions,
   TouchableWithoutFeedback,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Contacts from "expo-contacts";
@@ -31,6 +32,7 @@ import { getCurrentUser } from '../../services/AuthService';
 import AddActionMenu from '../AddActionMenu';
 import AddCategoryModal from '../AddCategoryModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 
 interface Contact {
   id: string;
@@ -654,7 +656,10 @@ export default function ContactsScreen() {
         <View style={[styles.header, { backgroundColor: colors.background }]}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Contacts</Text>
           <View style={styles.headerButtons}>
-            <TouchableOpacity onPress={toggleTheme} style={styles.headerButton}>
+            <TouchableOpacity onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              toggleTheme();
+            }} style={styles.headerButton}>
               <Ionicons 
                 name={theme === 'dark' ? 'sunny' : 'moon'} 
                 size={22} 
@@ -705,7 +710,10 @@ export default function ContactsScreen() {
                   borderColor: colors.selectedCategory 
                 }
               ]}
-              onPress={() => handleCategorySelect('all')}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handleCategorySelect('all');
+              }}
             >
               <Text style={[
                 styles.categoryChipText,
@@ -727,8 +735,12 @@ export default function ContactsScreen() {
                     borderColor: category.color 
                   }
                 ]}
-                onPress={() => handleCategorySelect(category.id)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handleCategorySelect(category.id);
+                }}
                 onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   Alert.alert(
                     'Delete Category',
                     `Are you sure you want to delete "${category.name}"?`,
@@ -737,7 +749,10 @@ export default function ContactsScreen() {
                       { 
                         text: 'Delete', 
                         style: 'destructive',
-                        onPress: () => handleDeleteCategory(category.id)
+                        onPress: () => {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          handleDeleteCategory(category.id);
+                        }
                       }
                     ]
                   );
@@ -950,7 +965,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: Platform.select({ ios: 12, android: 50 }),
     paddingBottom: 10,
     backgroundColor: '#000',
   },

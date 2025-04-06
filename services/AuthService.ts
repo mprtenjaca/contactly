@@ -2,6 +2,16 @@ import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import Constants from 'expo-constants';
+import { makeRedirectUri } from 'expo-auth-session';
+import {
+  GoogleSignin,
+  GoogleSigninButton,
+  statusCodes,
+} from '@react-native-google-signin/google-signin'
+
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -264,6 +274,75 @@ export const restoreSession = async () => {
     console.error('Error restoring session:', error);
   }
   return null;
+};
+
+export const signInWithGoogle = async () => {
+  try {
+    const [request, response, promptAsync] = Google.useAuthRequest({
+      clientId: Constants.expoConfig?.extra?.EXPO_GOOGLE_CLIENT_ID,
+      clientSecret: Constants.expoConfig?.extra?.EXPO_CLIENT_SECRET,
+      redirectUri: makeRedirectUri({
+        scheme: 'contactly'
+      }),
+      scopes: ['profile', 'email']
+    });
+
+    const result = await promptAsync();
+    
+    if (result?.type === 'success') {
+      // Get the access token from the result
+      const { access_token } = result.params;
+      
+      // Sign in with Supabase using the Google access token
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: access_token
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        // Split session data
+        const { sensitive, nonSensitive } = splitSessionData(data.session);
+        
+        // Store sensitive data in SecureStore
+        await SecureStore.setItemAsync(SENSITIVE_SESSION_KEY, JSON.stringify(sensitive));
+        
+        // Store non-sensitive data in AsyncStorage
+        await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nonSensitive));
+        
+        // Fetch profile data
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.session.user.id)
+          .single();
+
+        // Split user data
+        const userData = {
+          id: data.session.user.id,
+          email: data.session.user.email,
+          firstName: profileData?.first_name,
+          lastName: profileData?.last_name,
+        };
+        
+        const { sensitive: sensitiveUser, nonSensitive: nonSensitiveUser } = splitUserData(userData);
+        
+        // Store sensitive user data in SecureStore
+        await SecureStore.setItemAsync(SENSITIVE_USER_KEY, JSON.stringify(sensitiveUser));
+        
+        // Store non-sensitive user data in AsyncStorage
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(nonSensitiveUser));
+      }
+
+      return { data: { session: data.session } };
+    }
+
+    throw new Error('Google sign in was cancelled or failed');
+  } catch (error) {
+    console.error('Error in signInWithGoogle:', error);
+    throw error;
+  }
 };
 
 export { supabase }; 

@@ -63,7 +63,7 @@ export const sendPushNotification = async (
     // Call your push notification service (e.g., Expo's push service)
     const messages = tokens.map(({ token }) => ({
       to: token,
-      sound: 'notification-sound.wav',
+      sound: 'notificationSound.wav',
       title,
       body,
       data,

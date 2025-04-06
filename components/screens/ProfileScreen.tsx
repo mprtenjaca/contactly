@@ -40,7 +40,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Print from 'expo-print';
 import { format } from 'date-fns';
 import * as Clipboard from 'expo-clipboard';
-
+import * as Haptics from 'expo-haptics';
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'es', name: 'Español', flag: '🇪🇸' },
@@ -77,11 +77,23 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     loadUserProfile();
+    loadLastBackupDate();
     const unsubscribe = offlineManager.addConnectivityListener(setIsOnline);
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
+
+  const loadLastBackupDate = async () => {
+    try {
+      const date = await SecureStore.getItemAsync('lastBackupDate');
+      if (date) {
+        setLastBackupDate(date);
+      }
+    } catch (error) {
+      console.error('Error loading last backup date:', error);
+    }
+  };
 
   const loadUserProfile = async () => {
     try {
@@ -316,31 +328,46 @@ export default function ProfileScreen() {
   };
 
   const exportActivitiesToCSV = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
+    Alert.alert(
+      "Export Activities",
+      "Would you like to export your activities to a CSV file?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Export",
+          onPress: async () => {
+            try {
+              const user = await getCurrentUser();
+              if (!user) return;
 
-      // Get both future and past activities
-      const futureActivities = await getFutureActivities(user.id);
-      const pastActivities = await getPastActivities(user.id);
-      const allActivities = [...futureActivities, ...pastActivities];
-      
-      // Create CSV content
-      const csvHeader = 'Type,Contact,Date,Notes\n';
-      const csvContent = allActivities.map((activity: Activity) => {
-        return `${activity.type},"${activity.contactName}","${new Date(activity.date).toLocaleString()}","${activity.notes || ''}"`
-      }).join('\n');
-      
-      const csvString = csvHeader + csvContent;
-      const fileName = `activities_${new Date().toISOString().split('T')[0]}.csv`;
-      const filePath = `${FileSystem.documentDirectory}${fileName}`;
-      
-      await FileSystem.writeAsStringAsync(filePath, csvString);
-      await Sharing.shareAsync(filePath);
-    } catch (error) {
-      console.error('Error exporting activities:', error);
-      Alert.alert('Error', 'Failed to export activities');
-    }
+              // Get both future and past activities
+              const futureActivities = await getFutureActivities(user.id);
+              const pastActivities = await getPastActivities(user.id);
+              const allActivities = [...futureActivities, ...pastActivities];
+              
+              // Create CSV content
+              const csvHeader = 'Type,Contact,Date,Notes\n';
+              const csvContent = allActivities.map((activity: Activity) => {
+                return `${activity.type},"${activity.contactName}","${new Date(activity.date).toLocaleString()}","${activity.notes || ''}"`
+              }).join('\n');
+              
+              const csvString = csvHeader + csvContent;
+              const fileName = `activities_${new Date().toISOString().split('T')[0]}.csv`;
+              const filePath = `${FileSystem.documentDirectory}${fileName}`;
+              
+              await FileSystem.writeAsStringAsync(filePath, csvString);
+              await Sharing.shareAsync(filePath);
+            } catch (error) {
+              console.error('Error exporting activities:', error);
+              Alert.alert('Error', 'Failed to export activities');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const loadActivityStats = async () => {
@@ -376,52 +403,67 @@ export default function ProfileScreen() {
   };
 
   const exportActivitiesToPDF = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
+    Alert.alert(
+      "Export Activities",
+      "Would you like to export your activities to a PDF file?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Export",
+          onPress: async () => {
+            try {
+              const user = await getCurrentUser();
+              if (!user) return;
 
-      const futureActivities = await getFutureActivities(user.id);
-      const pastActivities = await getPastActivities(user.id);
-      const allActivities = [...futureActivities, ...pastActivities];
+              const futureActivities = await getFutureActivities(user.id);
+              const pastActivities = await getPastActivities(user.id);
+              const allActivities = [...futureActivities, ...pastActivities];
 
-      // Create HTML content for PDF
-      const htmlContent = `
-        <html>
-          <head>
-            <style>
-              body { font-family: 'Helvetica'; padding: 20px; }
-              h1 { color: #2196F3; }
-              .activity { border-bottom: 1px solid #eee; padding: 10px 0; }
-              .date { color: #666; }
-            </style>
-          </head>
-          <body>
-            <h1>Activity Report</h1>
-            <p>Generated on ${new Date().toLocaleDateString()}</p>
-            ${allActivities.map(activity => `
-              <div class="activity">
-                <h3>${activity.type} with ${activity.contactName}</h3>
-                <p class="date">${format(new Date(activity.date), 'PPP')}</p>
-                ${activity.notes ? `<p>${activity.notes}</p>` : ''}
-              </div>
-            `).join('')}
-          </body>
-        </html>
-      `;
+              // Create HTML content for PDF
+              const htmlContent = `
+                <html>
+                  <head>
+                    <style>
+                      body { font-family: 'Helvetica'; padding: 20px; }
+                      h1 { color: #2196F3; }
+                      .activity { border-bottom: 1px solid #eee; padding: 10px 0; }
+                      .date { color: #666; }
+                    </style>
+                  </head>
+                  <body>
+                    <h1>Activity Report</h1>
+                    <p>Generated on ${new Date().toLocaleDateString()}</p>
+                    ${allActivities.map(activity => `
+                      <div class="activity">
+                        <h3>${activity.type} with ${activity.contactName}</h3>
+                        <p class="date">${format(new Date(activity.date), 'PPP')}</p>
+                        ${activity.notes ? `<p>${activity.notes}</p>` : ''}
+                      </div>
+                    `).join('')}
+                  </body>
+                </html>
+              `;
 
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false
-      });
+              const { uri } = await Print.printToFileAsync({
+                html: htmlContent,
+                base64: false
+              });
 
-      await Sharing.shareAsync(uri, {
-        UTI: 'com.adobe.pdf',
-        mimeType: 'application/pdf'
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      Alert.alert('Error', 'Failed to export PDF');
-    }
+              await Sharing.shareAsync(uri, {
+                UTI: 'com.adobe.pdf',
+                mimeType: 'application/pdf'
+              });
+            } catch (error) {
+              console.error('Error exporting PDF:', error);
+              Alert.alert('Error', 'Failed to export PDF');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const toggleAutoBackup = async (enabled: boolean) => {
@@ -438,73 +480,104 @@ export default function ProfileScreen() {
   };
 
   const performBackup = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
+    Alert.alert(
+      "Backup Data",
+      "Would you like to create a backup of your contacts and activities?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Backup",
+          onPress: async () => {
+            try {
+              const user = await getCurrentUser();
+              if (!user) return;
 
-      setBackupStatus('in_progress');
+              setBackupStatus('in_progress');
 
-      // Backup activities and contacts to Supabase
-      const futureActivities = await getFutureActivities(user.id);
-      const pastActivities = await getPastActivities(user.id);
-      const contacts = await getAllContacts(user.id);
+              // Backup activities and contacts to Supabase
+              const futureActivities = await getFutureActivities(user.id);
+              const pastActivities = await getPastActivities(user.id);
+              const contacts = await getAllContacts(user.id);
 
-      const activitiesData = [...futureActivities, ...pastActivities];
-      const backupData = {
-        user_id: user.id,
-        activities: activitiesData,
-        contacts: contacts,
-        backup_type: 'manual',
-        backup_size: JSON.stringify(activitiesData).length + JSON.stringify(contacts).length,
-        status: 'completed'
-      };
+              const activitiesData = [...futureActivities, ...pastActivities];
+              const backupData = {
+                user_id: user.id,
+                activities: activitiesData,
+                contacts: contacts,
+                backup_type: 'manual',
+                backup_size: JSON.stringify(activitiesData).length + JSON.stringify(contacts).length,
+                status: 'completed'
+              };
 
-      const { error } = await supabase
-        .from('backups')
-        .insert(backupData);
+              const { error } = await supabase
+                .from('backups')
+                .insert(backupData);
 
-      if (error) throw error;
+              if (error) throw error;
 
-      const backupDate = new Date().toLocaleString();
-      await SecureStore.setItemAsync('lastBackupDate', backupDate);
-      setLastBackupDate(backupDate);
-      setBackupStatus('completed');
-      
-      Alert.alert('Success', 'Backup completed successfully');
-    } catch (error) {
-      console.error('Error performing backup:', error);
-      setBackupStatus('failed');
-      Alert.alert('Error', 'Failed to perform backup');
-    }
+              const backupDate = new Date().toLocaleString();
+              await SecureStore.setItemAsync('lastBackupDate', backupDate);
+              setLastBackupDate(backupDate);
+              setBackupStatus('completed');
+              
+              Alert.alert('Success', 'Backup completed successfully');
+            } catch (error) {
+              console.error('Error performing backup:', error);
+              setBackupStatus('failed');
+              Alert.alert('Error', 'Failed to perform backup');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const restoreFromBackup = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
+    Alert.alert(
+      "Restore Data",
+      "This will restore your data from the latest backup. Any changes made after the last backup will be lost. Are you sure you want to continue?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Restore",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const user = await getCurrentUser();
+              if (!user) return;
 
-      // Get the latest backup
-      const { data: latestBackup, error } = await supabase
-        .from('backups')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+              // Get the latest backup
+              const { data: latestBackup, error } = await supabase
+                .from('backups')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('status', 'completed')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
 
-      if (error) throw error;
-      if (!latestBackup) {
-        Alert.alert('No Backup', 'No backup found to restore from');
-        return;
-      }
+              if (error) throw error;
+              if (!latestBackup) {
+                Alert.alert('No Backup', 'No backup found to restore from');
+                return;
+              }
 
-      // Directly restore all data
-      await restoreSpecificData(latestBackup, 'all');
-    } catch (error) {
-      console.error('Error restoring backup:', error);
-      Alert.alert('Error', 'Failed to restore backup');
-    }
+              // Directly restore all data
+              await restoreSpecificData(latestBackup, 'all');
+            } catch (error) {
+              console.error('Error restoring backup:', error);
+              Alert.alert('Error', 'Failed to restore backup');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const importFromFile = async () => {
@@ -844,7 +917,7 @@ export default function ProfileScreen() {
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingTop: 12,
+      paddingTop: Platform.select({ ios: 12, android: 50 }),
       paddingBottom: 10,
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -981,7 +1054,7 @@ export default function ProfileScreen() {
     },
     dataModalContainer: {
       flex: 1,
-      marginTop: 50,
+      marginTop: Platform.select({ ios: 50, android: 0 }),
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
     },
@@ -990,6 +1063,7 @@ export default function ProfileScreen() {
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: 20,
+      // paddingTop: Platform.select({ ios: 0, android: 50 }),
       borderBottomWidth: 1,
       borderBottomColor: colors.separator,
     },
@@ -1034,7 +1108,7 @@ export default function ProfileScreen() {
     modalTitle: {
       fontSize: 20,
       fontWeight: '600',
-      marginBottom: 16,
+      marginBottom: 0,
       textAlign: 'center',
       color: colors.text,
     },
@@ -1172,7 +1246,10 @@ export default function ProfileScreen() {
               <Text style={styles.settingLabel}>Dark Mode</Text>
               <Switch
                 value={theme === 'dark'}
-                onValueChange={toggleTheme}
+                onValueChange={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleTheme();
+                }}
                 trackColor={{ false: '#767577', true: colors.selectedCategory + '80' }}
                 thumbColor={theme === 'dark' ? colors.selectedCategory : '#f4f3f4'}
               />
@@ -1188,7 +1265,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.settingRow}
               onPress={() => setShowLanguageSelector(!showLanguageSelector)}
             >
@@ -1205,7 +1282,7 @@ export default function ProfileScreen() {
                   color={colors.secondaryText} 
                 />
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {showLanguageSelector && (
               <View style={{ marginTop: 8 }}>

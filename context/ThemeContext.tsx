@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Platform, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightColors, darkColors } from '../constants/Colors';
 
@@ -15,7 +15,7 @@ const THEME_STORAGE_KEY = 'user_theme_preference';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const deviceTheme = useColorScheme();
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>(Appearance.getColorScheme() as Theme);
 
   useEffect(() => {
     loadThemePreference();
@@ -23,8 +23,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const loadThemePreference = async () => {
     try {
-      const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+      const savedTheme = Appearance.getColorScheme();
+      console.log('Device theme:', savedTheme);
       if (savedTheme) {
+        console.log('Setting theme:', savedTheme);
         setTheme(savedTheme as Theme);
       } else {
         // Use light theme as default
@@ -38,6 +40,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    console.log('Toggling theme:', newTheme);
     setTheme(newTheme);
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);

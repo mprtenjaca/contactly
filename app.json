@@ -3,7 +3,7 @@
     "name": "Contactly",
     "slug": "contactly",
     "version": "1.0.0",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icons/Dark.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -32,8 +32,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/icons/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       },
       "permissions": [
         "READ_CONTACTS",
@@ -48,10 +48,14 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": {
+            "light": "./assets/icons/Light.png",
+            "dark": "./assets/icons/Dark.png",
+            "tinted": "./assets/icons/Tinted.png"
+          },
           "color": "#ffffff",
           "sounds": [
-            "./assets/notification-sound.wav"
+            "./assets/notificationSound.wav"
           ],
           "mode": "production"
         }
@@ -66,6 +70,18 @@
             "useSQLCipher": false
           }
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/icons/splash-icon-dark.png",
+          "dark": {
+            "image": "./assets/icons/splash-icon-light.png",
+            "backgroundColor": "#000000"
+          },
+          "imageWidth": 200
+        }
       ]
     ],
     "owner": "mprtenja",
@@ -74,6 +90,13 @@
         "projectId": "83e27bfc-cb91-4b26-b0af-955112c1b062"
       }
     },
-    "scheme": "contactly"
+    "scheme": "contactly",
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
