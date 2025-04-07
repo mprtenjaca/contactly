@@ -15,6 +15,9 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { signIn, signInWithGoogle } from '../../services/AuthService';
 import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
+import GoogleIcon from '../../components/GoogleIcon';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -25,6 +28,10 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const passwordInput = useRef<TextInput>(null);
+
+  const [fontsLoaded] = useFonts({
+    'SpaceMono': require('../../assets/fonts/SpaceMono-Regular.ttf'),
+  });
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword(prev => !prev);
@@ -74,33 +81,38 @@ export default function SignInScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="on-drag"
-        scrollEnabled={false}
+        scrollEnabled={true}
       >
         <View style={styles.logoContainer}>
-          <View style={styles.logoRow}>
-            <Image
-              source={require('../../assets/images/Light-Transparent.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={[styles.title, { color: colors.text }]}>Contactly</Text>
+          <Image
+            source={colors.background === '#fff' 
+              ? require('../../assets/images/Light-Transparent.png')
+              : require('../../assets/images/Dark-Transparent.png')
+            }
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <View style={styles.textContainer}>
+            <Text style={[styles.welcomeText, { color: colors.text }]}>
+              Welcome Back! We're thrilled to see you again.
+            </Text>
+            <Text style={[styles.signInText, { color: colors.secondaryText }]}>
+              Sign in to continue managing your contacts
+            </Text>
           </View>
-          <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
-            Sign in to manage your contacts
-          </Text>
         </View>
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color={colors.secondaryText} style={styles.inputIcon} />
+            <Ionicons name="mail-outline" size={20} color={colors.placeholder} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, { 
-                backgroundColor: '#FFFFFF',
+                backgroundColor: colors.background,
                 color: colors.text,
                 borderColor: colors.border
               }]}
               placeholder="Email"
-              placeholderTextColor={colors.secondaryText}
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -112,16 +124,16 @@ export default function SignInScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color={colors.secondaryText} style={styles.inputIcon} />
+            <Ionicons name="lock-closed-outline" size={20} color={colors.placeholder} style={styles.inputIcon} />
             <TextInput
               ref={passwordInput}
               style={[styles.input, { 
-                backgroundColor: '#FFFFFF',
+                backgroundColor: colors.background,
                 color: colors.text,
                 borderColor: colors.border
               }]}
               placeholder="Password"
-              placeholderTextColor={colors.secondaryText}
+              placeholderTextColor={colors.placeholder}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -136,7 +148,7 @@ export default function SignInScreen() {
               <Ionicons 
                 name={showPassword ? "eye-off-outline" : "eye-outline"} 
                 size={20} 
-                color={colors.secondaryText} 
+                color={colors.placeholder} 
               />
             </TouchableOpacity>
           </View>
@@ -164,18 +176,17 @@ export default function SignInScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.googleButton, { backgroundColor: colors.searchBar }]}
+            style={[styles.googleButton]}
             onPress={handleGoogleSignIn}
             disabled={loading}
           >
-            <Image
-              source={require('../../assets/icons/Dark.png')}
-              style={styles.googleIcon}
-            />
+            <GoogleIcon size={24} />
             <Text style={[styles.googleButtonText, { color: colors.text }]}>
               Sign in with Google
             </Text>
           </TouchableOpacity>
+
+          {/* <GoogleSignInButton onPress={handleGoogleSignIn} /> */}
 
           <TouchableOpacity
             onPress={() => router.push('/sign-up')}
@@ -184,7 +195,7 @@ export default function SignInScreen() {
             <Text style={[styles.signUpText, { color: colors.secondaryText }]}>
               Don't have an account?{' '}
             </Text>
-            <Text style={[styles.signUpLink, { color: colors.selectedCategory }]}>
+            <Text style={[styles.signUpLink, { color: colors.placeholder }]}>
               Sign Up
             </Text>
           </TouchableOpacity>
@@ -207,22 +218,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
   logo: {
-    width: 45,
-    height: 45,
-    marginRight: 15,
+    width: 50,
+    height: 50,
+    marginBottom: 24,
   },
-  title: {
-    fontSize: 32,
+  textContainer: {
+    width: '100%',
+    paddingRight: 20,
+  },
+  welcomeText: {
+    fontSize: 30,
     fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Raleway, sans-serif',
+    lineHeight: 40,
   },
-  subtitle: {
+  signInText: {
     fontSize: 16,
+    fontFamily: 'Raleway, sans-serif',
   },
   formContainer: {
     width: '100%',
@@ -277,6 +291,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Raleway, sans-serif',
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -299,14 +314,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-  },
   googleButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Raleway, sans-serif',
   },
   signUpContainer: {
     flexDirection: 'row',
@@ -314,10 +325,13 @@ const styles = StyleSheet.create({
   },
   signUpText: {
     fontSize: 14,
+    fontFamily: 'Raleway, sans-serif',
   },
   signUpLink: {
     fontSize: 14,
+    color: '#1E1E1E',
     fontWeight: '600',
+    fontFamily: 'Raleway, sans-serif',
   },
 });
 

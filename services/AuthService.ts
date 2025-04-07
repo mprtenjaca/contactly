@@ -11,6 +11,7 @@ import {
   GoogleSigninButton,
   statusCodes,
 } from '@react-native-google-signin/google-signin'
+import { saveUserToLocal } from './DatabaseService';
 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -24,7 +25,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 interface User {
   id: string;
-  email: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
 }
@@ -161,6 +162,9 @@ export const signIn = async (email: string, password: string) => {
         firstName: profileData?.first_name,
         lastName: profileData?.last_name,
       };
+
+      // Save to local DB (not a new user for regular sign-in)
+      await saveUserToLocal(userData, false);
       
       const { sensitive: sensitiveUser, nonSensitive: nonSensitiveUser } = splitUserData(userData);
       
@@ -278,53 +282,169 @@ export const restoreSession = async () => {
 
 export const signInWithGoogle = async () => {
   try {
-    const [request, response, promptAsync] = Google.useAuthRequest({
-      clientId: Constants.expoConfig?.extra?.EXPO_GOOGLE_CLIENT_ID,
-      clientSecret: Constants.expoConfig?.extra?.EXPO_CLIENT_SECRET,
-      redirectUri: makeRedirectUri({
-        scheme: 'contactly'
-      }),
-      scopes: ['profile', 'email']
+    // First, sign out to clear any existing sessions
+    await supabase.auth.signOut();
+    
+    // Clear session storage to start fresh
+    await SecureStore.deleteItemAsync(SENSITIVE_SESSION_KEY);
+    await AsyncStorage.removeItem(SESSION_KEY);
+    
+    // Create new OAuth sign-in attempt
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'contactly://auth/callback',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account', // Force account selection
+        },
+      }
     });
 
-    const result = await promptAsync();
+    if (error) throw error;
+
+    if (!data?.url) {
+      throw new Error('Failed to create authentication URL');
+    }
+
+    console.log("Opening auth URL...");
     
-    if (result?.type === 'success') {
-      // Get the access token from the result
-      const { access_token } = result.params;
+    // Open browser with auth URL
+    const result = await WebBrowser.openAuthSessionAsync(
+      data.url,
+      'contactly://auth/callback',
+      {
+        showInRecents: true,
+        createTask: true
+      }
+    );
+
+    console.log("Auth browser result:", result.type);
+
+    if (result.type === 'success') {
+      let session = null;
       
-      // Sign in with Supabase using the Google access token
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: access_token
+      if (!session) {
+        // Try one more approach - parse the URL for session data
+        if (result.url && result.url.includes('access_token')) {
+          console.log("Trying to extract session from redirect URL...");
+          const url = new URL(result.url);
+          const params = new URLSearchParams(url.hash.substring(1));
+          
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          
+          if (access_token && refresh_token) {
+            console.log("Setting session from URL parameters...");
+            const { data: setSessionData, error: setSessionError } = 
+              await supabase.auth.setSession({
+                access_token,
+                refresh_token
+              });
+              
+            if (setSessionError) {
+              console.error("Error setting session:", setSessionError);
+            } else if (setSessionData.session) {
+              session = setSessionData.session;
+              console.log("Session set from URL parameters!");
+            }
+          }
+        }
+      }
+      
+      if (!session) {
+        throw new Error('Failed to obtain authentication session after multiple attempts. Please try again.');
+      }
+
+      console.log('Session successfully obtained:', session.user.id);
+      
+      // Get user metadata from Google authentication
+      const googleFirstName = session.user?.user_metadata?.full_name?.split(' ')[0] || '';
+      const googleLastName = session.user?.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '';
+      const googleEmail = session.user.email || '';
+      
+      console.log('Google user info:', {
+        full_name: session.user?.user_metadata?.full_name,
+        firstName: googleFirstName,
+        lastName: googleLastName,
+        email: googleEmail
       });
-
-      if (error) throw error;
-
-      if (data.session) {
-        // Split session data
-        const { sensitive, nonSensitive } = splitSessionData(data.session);
+      
+      // Split session data
+      const { sensitive, nonSensitive } = splitSessionData(session);
+      
+      // Store sensitive data in SecureStore
+      await SecureStore.setItemAsync(SENSITIVE_SESSION_KEY, JSON.stringify(sensitive));
+      
+      // Store non-sensitive data in AsyncStorage
+      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nonSensitive));
+      
+      // Check if profile exists
+      const { data: existingProfile, error: profileFetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
         
-        // Store sensitive data in SecureStore
-        await SecureStore.setItemAsync(SENSITIVE_SESSION_KEY, JSON.stringify(sensitive));
+      console.log("Existing profile:", existingProfile);
+      
+      if (profileFetchError && profileFetchError.code !== 'PGRST116') {
+        console.warn('Error fetching profile:', profileFetchError);
+      }
+      
+      // If profile doesn't exist or has empty name fields, create/update it
+      if (!existingProfile || !existingProfile.first_name) {
+        console.log("Creating/updating profile with Google data");
         
-        // Store non-sensitive data in AsyncStorage
-        await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nonSensitive));
-        
-        // Fetch profile data
-        const { data: profileData } = await supabase
+        const { data: updatedProfile, error: updateError } = await supabase
           .from('profiles')
-          .select('*')
-          .eq('id', data.session.user.id)
+          .upsert({
+            id: session.user.id,
+            first_name: googleFirstName,
+            last_name: googleLastName,
+            email: googleEmail,
+            updated_at: new Date().toISOString()
+          })
+          .select()
           .single();
-
-        // Split user data
+          
+        if (updateError) {
+          console.error('Error updating profile:', updateError);
+        } else {
+          console.log("Profile updated successfully:", updatedProfile);
+        }
+        
+        // Use the updated profile data
         const userData = {
-          id: data.session.user.id,
-          email: data.session.user.email,
-          firstName: profileData?.first_name,
-          lastName: profileData?.last_name,
+          id: session.user.id,
+          email: googleEmail,
+          firstName: googleFirstName,
+          lastName: googleLastName,
         };
+
+        // Create user in local storage and add default categories since this is a new user
+        console.log("Is user existing?", existingProfile);
+        await saveUserToLocal(userData, existingProfile ? false : true); // true flag indicates this is a new user
+        
+        const { sensitive: sensitiveUser, nonSensitive: nonSensitiveUser } = splitUserData(userData);
+        
+        // Store sensitive user data in SecureStore
+        await SecureStore.setItemAsync(SENSITIVE_USER_KEY, JSON.stringify(sensitiveUser));
+        
+        // Store non-sensitive user data in AsyncStorage
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(nonSensitiveUser));
+      } else {
+        // Use existing profile data
+        const userData = {
+          id: session.user.id,
+          email: session.user.email,
+          firstName: existingProfile.first_name || '',
+          lastName: existingProfile.last_name || '',
+        };
+        
+        // Save to local storage (not a new user)
+        console.log("Is user existing 1?", existingProfile);
+        await saveUserToLocal(userData, existingProfile ? false : true);
         
         const { sensitive: sensitiveUser, nonSensitive: nonSensitiveUser } = splitUserData(userData);
         
@@ -334,11 +454,15 @@ export const signInWithGoogle = async () => {
         // Store non-sensitive user data in AsyncStorage
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(nonSensitiveUser));
       }
-
-      return { data: { session: data.session } };
+      
+      return { data: { session } };
+    } else if (result.type === 'cancel') {
+      throw new Error('Authentication was cancelled');
+    } else {
+      throw new Error(`Authentication failed with result: ${result.type}`);
     }
-
-    throw new Error('Google sign in was cancelled or failed');
+    
+    throw new Error('Could not initiate Google sign in');
   } catch (error) {
     console.error('Error in signInWithGoogle:', error);
     throw error;

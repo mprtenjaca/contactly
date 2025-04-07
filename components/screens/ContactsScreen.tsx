@@ -70,10 +70,12 @@ export default function ContactsScreen() {
   const sectionListRef = useRef<RNSectionList>(null);
   const [showLetterOverlay, setShowLetterOverlay] = useState(false);
   const [currentLetter, setCurrentLetter] = useState('');
+  const [hasSyncedContacts, setHasSyncedContacts] = useState(false);
 
   // Load saved category on mount
   useEffect(() => {
     loadSavedCategory();
+    checkContactSyncStatus();
   }, []);
 
   // Save category whenever it changes
@@ -89,6 +91,24 @@ export default function ContactsScreen() {
       }
     } catch (error) {
       console.error('Error loading saved category:', error);
+    }
+  };
+
+  const checkContactSyncStatus = async () => {
+    try {
+      const syncStatus = await AsyncStorage.getItem('contactsSynced');
+      setHasSyncedContacts(syncStatus === 'true');
+    } catch (error) {
+      console.error('Error checking contact sync status:', error);
+    }
+  };
+
+  const markContactsAsSynced = async () => {
+    try {
+      await AsyncStorage.setItem('contactsSynced', 'true');
+      setHasSyncedContacts(true);
+    } catch (error) {
+      console.error('Error marking contacts as synced:', error);
     }
   };
 
@@ -425,6 +445,7 @@ export default function ContactsScreen() {
 
   const loadCategories = async () => {
     try {
+      console.log("Loading categories");
       const user = await getCurrentUser();
       if (!user) return;
 
@@ -443,10 +464,14 @@ export default function ContactsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const refreshData = async () => {
+        console.log("Refreshing data");
         try {
           setLoading(true);
           const user = await getCurrentUser();
           if (!user) return;
+
+          // Instead of loading all contacts to check, use our stored flag
+          await checkContactSyncStatus();
 
           // Load or restore the selected category
           const savedCategory = await AsyncStorage.getItem('selectedCategory');
@@ -626,6 +651,8 @@ export default function ContactsScreen() {
 
               if (newContacts.length === 0) {
                 Alert.alert('Sync Complete', 'All contacts are already synced.');
+                // Even if no new contacts, mark as synced
+                await markContactsAsSynced();
                 return;
               }
 
@@ -636,6 +663,9 @@ export default function ContactsScreen() {
               const allContacts = await getAllContacts(user.id);
               const sortedContacts = sortContacts(allContacts);
               setContacts(sortedContacts);
+
+              // Mark contacts as synced
+              await markContactsAsSynced();
 
               Alert.alert('Sync Complete', `Successfully imported ${newContacts.length} new contacts.`);
             } catch (error) {
@@ -800,21 +830,48 @@ export default function ContactsScreen() {
           <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
             <View style={styles.emptyIconContainer}>
               <Ionicons 
-                name="people-circle-outline" 
+                name={hasSyncedContacts && selectedCategory !== 'all' ? "people-circle-outline" : "cloud-download-outline"} 
                 size={120} 
                 color={colors.selectedCategory} 
                 style={styles.emptyIcon}
               />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              No contacts here yet
+              {hasSyncedContacts && selectedCategory !== 'all' 
+                ? "No contacts in this category" 
+                : "No contacts yet"}
             </Text>
             <Text style={[styles.emptySubText, { color: colors.secondaryText }]}>
-              {selectedCategory === 'all' 
-                ? "Start by adding your first contact!"
-                : `This category is feeling a bit lonely.\nAdd some contacts to keep it company!`
-              }
+              {hasSyncedContacts 
+                ? (selectedCategory !== 'all' 
+                   ? "This category is feeling a bit lonely.\nAdd some contacts to keep it company!" 
+                   : "Your contacts may have been deleted.\nTry syncing to restore them.")
+                : "Import your contacts from your device to get started."}
             </Text>
+            
+            {hasSyncedContacts && selectedCategory !== 'all' ? (
+              <TouchableOpacity 
+                style={[styles.syncButton, { backgroundColor: colors.selectedCategory }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push('/contact/new');
+                }}
+              >
+                <Ionicons name="add" size={24} color="#fff" style={styles.syncButtonIcon} />
+                <Text style={styles.syncButtonText}>Add Contact</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={[styles.syncButton, { backgroundColor: colors.selectedCategory }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  handleSyncContacts();
+                }}
+              >
+                <Ionicons name="sync-outline" size={24} color="#fff" style={styles.syncButtonIcon} />
+                <Text style={styles.syncButtonText}>Sync Contacts</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : searchQuery ? (
           <ScrollView 
@@ -1237,5 +1294,22 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    marginTop: 16,
+  },
+  syncButtonIcon: {
+    marginRight: 12,
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 }); 

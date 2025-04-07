@@ -27,7 +27,7 @@
         "googleServicesFile": "./GoogleService-Info.plist"
       },
       "bundleIdentifier": "com.mpcode.contactly",
-      "icon": "./assets/ios-icon.png",
+      "icon": "./assets/icons/splash-icon-light.png",
       "customBuildFlags": ["-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_ENABLE_SNAPSHOT=1"]
     },
     "android": {

@@ -387,21 +387,36 @@ export const scheduleNotificationsForActivity = async (activity: Activity) => {
 
     const scheduledIds = [];
     
+    // Format the title to include formatted activity type labels
+    const getActivityTypeLabel = (type: string): string => {
+      switch (type.toLowerCase()) {
+        case 'call': return 'Phone Call';
+        case 'message': return 'Message';
+        case 'meeting': return 'Meeting';
+        case 'note': return 'Note';
+        case 'email': return 'Email';
+        case 'whatsapp': return 'WhatsApp';
+        default: return type.charAt(0).toUpperCase() + type.slice(1);
+      }
+    };
+
+    const notificationTitle = `${getActivityTypeLabel(activity.type)} - ${activity.contactName}`;
+    
     for (const { minutes, message } of notificationTimes) {
       const notificationTime = new Date(activity.date.getTime() - minutes * 60000);
       if (notificationTime > new Date()) {
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: `${activity.type} with ${activity.contactName}`,
+            title: notificationTitle,
             body: message,
             data: { 
               contactId: activity.contactId,
               activityId: activity.id
             },
           },
-          trigger: {
+          trigger: { 
             date: notificationTime,
-            type: 'date'
+            channelId: 'reminders',
           },
         });
         scheduledIds.push(id);

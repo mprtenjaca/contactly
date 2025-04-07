@@ -33,6 +33,7 @@ export const signInWithGoogle = async (promptAsync: () => Promise<any>) => {
           headers: { Authorization: `Bearer ${authentication.accessToken}` },
         }
       );
+      console.log("User info response:", userInfoResponse);
       const userInfo = await userInfoResponse.json();
       return userInfo;
     }

@@ -2,6 +2,7 @@
 export const lightColors = {
   background: '#fff',
   containerBg: 'rgba(0, 0, 0, 0.04)',
+  placeholder: '#000',
   text: '#000',
   secondaryText: '#8e8e93',
   searchBar: '#e4e4ea',
@@ -22,6 +23,7 @@ export const lightColors = {
 export const darkColors = {
   background: '#141414',
   containerBg: 'rgba(255, 255, 255, 0.03)',
+  placeholder: '#fff',
   text: '#fff',
   secondaryText: '#8e8e93',
   searchBar: '#1c1c1e',

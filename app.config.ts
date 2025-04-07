@@ -6,7 +6,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'contactly',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/icon.png',
+  icon: './assets/icons/splash-icon-light.png',
   userInterfaceStyle: 'light',
   splash: {
     resizeMode: 'contain',
@@ -18,7 +18,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.mpcode.contactly',
-    icon: './assets/ios-icon.png',
+    icon: './assets/icons/splash-icon-light.png',
     infoPlist: {
       NSContactsUsageDescription: 'This app requires access to contacts to display and manage your contact list.',
       NSContactsWriteOnlyPermission: 'This app needs to write to your contacts.',

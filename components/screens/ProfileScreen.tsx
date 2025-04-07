@@ -100,10 +100,11 @@ export default function ProfileScreen() {
       setIsLoading(true);
       // First try to get from local storage
       const currentUser = await getCurrentUser();
+      console.log("Current user:", currentUser);
 
       if (currentUser?.id) {
         // Always set user from local storage first
-        setUser(currentUser);
+        setUser(currentUser as any);
 
         // Then fetch latest from Supabase if online
         if (offlineManager.getIsOnline()) {
