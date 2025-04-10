@@ -41,6 +41,9 @@ import * as Print from 'expo-print';
 import { format } from 'date-fns';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '../../context/AuthContext';
+import { isBiometricAvailable, isBiometricEnabled, setBiometricEnabled, authenticateBiometric } from '../../services/BiometricService';
+import * as LocalAuthentication from 'expo-local-authentication';
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'es', name: 'Español', flag: '🇪🇸' },
@@ -74,10 +77,14 @@ export default function ProfileScreen() {
   const [backupStatus, setBackupStatus] = useState<'idle' | 'in_progress' | 'completed' | 'failed'>('idle');
   const [showBackupHistoryModal, setShowBackupHistoryModal] = useState(false);
   const [backupHistory, setBackupHistory] = useState<any[]>([]);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
     loadLastBackupDate();
+    checkBiometricAvailability();
+    loadBiometricSetting();
     const unsubscribe = offlineManager.addConnectivityListener(setIsOnline);
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
@@ -126,7 +133,7 @@ export default function ProfileScreen() {
               firstName: profileData.first_name || currentUser.firstName,
               lastName: profileData.last_name || currentUser.lastName,
             };
-            setUser(updatedUser);
+            setUser(updatedUser as any);
             // Update local storage with latest data
             await saveUserToLocal(updatedUser);
           }
@@ -158,7 +165,6 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               console.log('Signing out...');
-              await signOut();
               
               router.replace('/sign-in');
             } catch (error) {
@@ -231,7 +237,7 @@ export default function ProfileScreen() {
 
       // Update local state
       console.log('Updating local state...', updatedUser);
-      setUser(updatedUser);
+      setUser(updatedUser as any);
 
       // Update local storage
       await saveUserToLocal(updatedUser);
@@ -1128,6 +1134,18 @@ export default function ProfileScreen() {
     backupInfo: {
       fontSize: 14,
     },
+    settingItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      backgroundColor: 'transparent',
+      borderBottomWidth: 1,
+    },
+    settingText: {
+      fontSize: 16,
+      fontWeight: '500',
+    },
   });
 
   const getActivityIcon = (type: string) => {
@@ -1203,6 +1221,147 @@ export default function ProfileScreen() {
     </Modal>
   );
 
+  const checkBiometricAvailability = async () => {
+    const available = await isBiometricAvailable();
+    setBiometricAvailable(available);
+  };
+
+  const loadBiometricSetting = async () => {
+    const enabled = await isBiometricEnabled();
+    setBiometricEnabledState(enabled);
+  };
+
+  const handleBiometricToggle = async (value: boolean) => {
+    try {
+      console.log('Biometric toggle started, value:', value);
+      
+      if (value) {
+        console.log('Attempting biometric authentication...');
+        const authenticated = await authenticateBiometric();
+        console.log('Authentication result:', authenticated);
+        
+        if (!authenticated) {
+          console.log('Authentication failed, keeping switch off');
+          Alert.alert(
+            'Authentication Failed',
+            'Please make sure you have biometric authentication (fingerprint or face recognition) set up on your device and try again.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        console.log('Authentication successful, enabling biometric security...');
+        await setBiometricEnabled(true);
+        setBiometricEnabledState(true);
+        Alert.alert('Success', 'Biometric security enabled');
+      } else {
+        console.log('Showing disable confirmation dialog...');
+        Alert.alert(
+          'Disable Biometric Security',
+          'Are you sure you want to disable biometric security?',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                console.log('Disable cancelled, keeping switch on');
+                setBiometricEnabledState(true);
+              }
+            },
+            {
+              text: 'Disable',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('Disabling biometric security...');
+                await setBiometricEnabled(false);
+                setBiometricEnabledState(false);
+                Alert.alert('Success', 'Biometric security disabled');
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error in biometric toggle:', error);
+      // Revert to previous state on error
+      setBiometricEnabledState(!value);
+      Alert.alert(
+        'Error',
+        'Failed to update biometric settings. Please make sure biometric authentication is properly set up on your device.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const authenticateBiometric = async (): Promise<boolean> => {
+    try {
+      // Check if we're in development mode (Expo Go)
+      if (__DEV__) {
+        console.log('Development mode detected - biometric authentication not available');
+        Alert.alert(
+          'Development Mode',
+          'Biometric authentication is not available in development mode. Please use a development build to test this feature.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      // Check if the module is available
+      if (!LocalAuthentication) {
+        console.log('LocalAuthentication module not available');
+        Alert.alert(
+          'Biometric Authentication Unavailable',
+          'Biometric authentication is not available in this environment. Please use a development build to test this feature.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      console.log('Checking biometric availability...');
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      console.log('Has biometric hardware:', hasHardware);
+      
+      if (!hasHardware) {
+        Alert.alert(
+          'Biometric Authentication Unavailable',
+          'Your device does not have biometric authentication hardware.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      console.log('Biometric enrolled:', enrolled);
+      
+      if (!enrolled) {
+        Alert.alert(
+          'Biometric Not Set Up',
+          'Please set up biometric authentication (fingerprint or face recognition) in your device settings.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      console.log('Attempting biometric authentication...');
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to enable biometric security',
+        disableDeviceFallback: true,
+        cancelLabel: 'Cancel',
+      });
+      
+      console.log('Authentication result:', result);
+      return result.success;
+    } catch (error) {
+      console.error('Biometric authentication error:', error);
+      Alert.alert(
+        'Authentication Error',
+        'An error occurred during biometric authentication. Please try again.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -1266,25 +1425,6 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* <TouchableOpacity
-              style={styles.settingRow}
-              onPress={() => setShowLanguageSelector(!showLanguageSelector)}
-            >
-              <Text style={styles.settingLabel}>Language</Text>
-              <Text style={styles.settingValue}>
-                {LANGUAGES.find(lang => lang.code === selectedLanguage)?.flag}
-                {' '}
-                {LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}
-              </Text>
-              <View style={styles.settingIcon}>
-                <Ionicons 
-                  name={showLanguageSelector ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color={colors.secondaryText} 
-                />
-              </View>
-            </TouchableOpacity> */}
-
             {showLanguageSelector && (
               <View style={{ marginTop: 8 }}>
                 {LANGUAGES.map(language => (
@@ -1311,16 +1451,6 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Data & Backup</Text>
           <View style={styles.card}>
-            {/* <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Automatic Backup</Text>
-              <Switch
-                value={backupEnabled}
-                onValueChange={toggleAutoBackup}
-                trackColor={{ false: '#767577', true: colors.selectedCategory + '80' }}
-                thumbColor={backupEnabled ? colors.selectedCategory : '#f4f3f4'}
-              />
-            </View> */}
-            
             {lastBackupDate && (
               <Text style={[styles.settingValue, { fontSize: 12, marginTop: -8, marginBottom: 8 }]}>
                 Last backup: {lastBackupDate}
@@ -1376,16 +1506,6 @@ export default function ProfileScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* <TouchableOpacity
-              style={styles.settingRow}
-              onPress={importFromFile}
-            >
-              <Text style={styles.settingLabel}>Import Data</Text>
-              <View style={styles.settingIcon}>
-                <Ionicons name="cloud-upload-outline" size={24} color={colors.selectedCategory} />
-              </View>
-            </TouchableOpacity> */}
-
             <TouchableOpacity
               style={styles.settingRow}
               onPress={() => {
@@ -1408,27 +1528,22 @@ export default function ProfileScreen() {
                 <Ionicons name="time-outline" size={24} color={colors.selectedCategory} />
               </View>
             </TouchableOpacity>
-
-            {/* <TouchableOpacity
-              style={styles.settingRow}
-              onPress={generateBackupCode}
-            >
-              <Text style={styles.settingLabel}>Generate Backup Code</Text>
-              <View style={styles.settingIcon}>
-                <Ionicons name="key-outline" size={24} color={colors.selectedCategory} />
-              </View>
-            </TouchableOpacity> */}
-
-            {/* <TouchableOpacity
-              style={styles.settingRow}
-              onPress={restoreFromCode}
-            >
-              <Text style={styles.settingLabel}>Restore from Backup Code</Text>
-              <View style={styles.settingIcon}>
-                <Ionicons name="key-outline" size={24} color={colors.selectedCategory} />
-              </View>
-            </TouchableOpacity> */}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Security</Text>
+          {biometricAvailable && (
+            <View style={[styles.settingItem, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.settingText, { color: colors.text }]}>Biometric Security</Text>
+              <Switch
+                value={biometricEnabled}
+                onValueChange={handleBiometricToggle}
+                trackColor={{ false: colors.border, true: '#1E1E1E' }}
+                thumbColor={biometricEnabled ? '#fff' : colors.placeholder}
+              />
+            </View>
+          )}
         </View>
 
         <TouchableOpacity 

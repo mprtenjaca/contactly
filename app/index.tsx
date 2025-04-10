@@ -10,7 +10,7 @@ export default function Index() {
   }
 
   if (!session) {
-    return <Redirect href="/(auth)/sign-in" />;
+    return <Redirect href="/(auth)/onboarding" />;
   }
 
   return <Redirect href="/(tabs)" />;

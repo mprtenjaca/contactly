@@ -13,6 +13,7 @@ import ProfileScreen from '../components/screens/ProfileScreen';
 import { configureGoogleSignIn } from '../services/GoogleAuthService';
 import { restoreSession } from '../services/AuthService';
 import { offlineManager } from '../services/OfflineManager';
+import { isBiometricEnabled, authenticateBiometric } from '../services/BiometricService';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -30,6 +31,19 @@ export default function RootLayout() {
     // initDatabase().catch(error => {
     //   console.error('Failed to initialize database:', error);
     // });
+
+    const checkBiometric = async () => {
+      const enabled = await isBiometricEnabled();
+      if (enabled) {
+        const authenticated = await authenticateBiometric();
+        if (!authenticated) {
+          // If biometric authentication fails, redirect to sign-in
+          router.replace('/sign-in');
+        }
+      }
+    };
+
+    checkBiometric();
 
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const phoneNumber = response.notification.request.content.data?.phoneNumber;

@@ -18,6 +18,7 @@ export default function AuthLayout() {
         animationDuration: 200,
       }}
     >
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="sign-up" />
     </Stack>
