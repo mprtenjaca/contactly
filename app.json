@@ -24,7 +24,8 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "googleServicesFile": "./GoogleService-Info.plist"
+        "googleServicesFile": "./GoogleService-Info.plist",
+        "NSFaceIDUsageDescription": "This app uses Face ID to secure your data and protect your privacy."
       },
       "bundleIdentifier": "com.mpcode.contactly",
       "icon": "./assets/icons/splash-icon-light.png",
@@ -39,7 +40,9 @@
         "READ_CONTACTS",
         "WRITE_CONTACTS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
       ],
       "package": "com.mpcode.contactly"
     },
@@ -81,6 +84,12 @@
             "backgroundColor": "#000000"
           },
           "imageWidth": 200
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "This app uses Face ID to secure your data and protect your privacy."
         }
       ]
     ],
