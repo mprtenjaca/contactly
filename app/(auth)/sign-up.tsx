@@ -36,9 +36,13 @@ export default function SignUpScreen() {
   const emailInput = useRef<TextInput>(null);
   const [error, setError] = useState('');
 
-  const [fontsLoaded] = useFonts({
-    'SpaceMono': require('../../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  // const [fontsLoaded] = useFonts({
+  //   'SpaceMono': require('../../assets/fonts/SpaceMono-Regular.ttf'),
+  // });
+
+  // if (!fontsLoaded) {
+  //   return null; // or a loading indicator
+  // }
 
   const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {

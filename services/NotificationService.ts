@@ -414,7 +414,7 @@ export const scheduleNotificationsForActivity = async (activity: Activity) => {
               activityId: activity.id
             },
           },
-          trigger: { 
+          trigger: {
             date: notificationTime,
             channelId: 'reminders',
           },

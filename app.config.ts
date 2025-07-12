@@ -19,14 +19,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: 'com.mpcode.contactly',
     icon: './assets/icons/splash-icon-light.png',
+    googleServicesFile: './GoogleService-Info.plist',
     infoPlist: {
       NSContactsUsageDescription: 'This app requires access to contacts to display and manage your contact list.',
-      NSContactsWriteOnlyPermission: 'This app needs to write to your contacts.',
-      NSContactsPermission: 'This app needs access to contacts.',
       NSMicrophoneUsageDescription: 'This app needs access to microphone to detect incoming calls',
-      NSCallKitEnabled: true,
-      UIBackgroundModes: ['remote-notification'],
-      googleServicesFile: './GoogleService-Info.plist'
+      UIBackgroundModes: ['remote-notification']
     }
   },
   android: {

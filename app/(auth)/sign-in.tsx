@@ -29,9 +29,13 @@ export default function SignInScreen() {
   const [error, setError] = useState('');
   const passwordInput = useRef<TextInput>(null);
 
-  const [fontsLoaded] = useFonts({
-    'SpaceMono': require('../../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  // const [fontsLoaded] = useFonts({
+  //   'SpaceMono': require('../../assets/fonts/SpaceMono-Regular.ttf'),
+  // });
+
+  // if (!fontsLoaded) {
+  //   return null; // or a loading indicator
+  // }
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword(prev => !prev);

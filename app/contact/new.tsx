@@ -135,27 +135,27 @@ export default function NewContact() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
       >
-        <View style={styles.inner}>
-          {/* Header */}
-          <View style={[styles.header, { backgroundColor: colors.background }]}>
-            <TouchableOpacity 
-              onPress={() => router.back()} 
-              style={styles.headerButton}
-            >
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>New Contact</Text>
-            <View style={styles.headerButton} />
-          </View>
+          <View style={styles.inner}>
+            {/* Header */}
+            <View style={[styles.header, { backgroundColor: colors.background }]}>
+              <TouchableOpacity 
+                onPress={() => router.back()} 
+                style={styles.headerButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>New Contact</Text>
+              <View style={styles.headerButton} />
+            </View>
 
-          <ScrollView 
-            style={styles.form}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.formContent}
+            <ScrollView 
+              style={styles.form}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.formContent}
             keyboardShouldPersistTaps="handled"
-          >
-            {/* Form Fields */}
-            <View style={styles.fieldsContainer}>
+            >
+              {/* Form Fields */}
+              <View style={styles.fieldsContainer}>
               <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={[styles.inputContainer, { backgroundColor: colors.searchBar }]}>
                   <Text style={[styles.label, { color: colors.secondaryText }]}>Name</Text>
@@ -198,35 +198,35 @@ export default function NewContact() {
                 </View>
               </TouchableWithoutFeedback>
 
-              {/* Categories */}
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Category</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.categoriesContainer}
+                {/* Categories */}
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Category</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoriesContainer}
                 keyboardShouldPersistTaps="handled"
-              >
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={[
-                      styles.categoryChip,
-                      { 
-                        backgroundColor: selectedCategory === category.id ? category.color : colors.categoryBg,
-                        borderColor: category.color 
-                      }
-                    ]}
-                    onPress={() => setSelectedCategory(category.id)}
-                  >
-                    <Text style={[
-                      styles.categoryChipText,
-                      { color: selectedCategory === category.id ? '#fff' : category.color }
-                    ]}>
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                >
+                  {categories.map((category) => (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[
+                        styles.categoryChip,
+                        { 
+                          backgroundColor: selectedCategory === category.id ? category.color : colors.categoryBg,
+                          borderColor: category.color 
+                        }
+                      ]}
+                      onPress={() => setSelectedCategory(category.id)}
+                    >
+                      <Text style={[
+                        styles.categoryChipText,
+                        { color: selectedCategory === category.id ? '#fff' : category.color }
+                      ]}>
+                        {category.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
 
               <TouchableOpacity 
                 style={[styles.checkboxContainer, { backgroundColor: colors.searchBar }]}
@@ -265,28 +265,28 @@ export default function NewContact() {
                   />
                 </View>
               </TouchableWithoutFeedback>
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
 
-          {/* Save Button */}
-          <View style={[styles.saveButtonContainer, { backgroundColor: colors.background }]}>
-            <TouchableOpacity 
-              onPress={handleSave}
-              disabled={!name.trim() || loading}
-              style={[
-                styles.saveButtonLarge,
-                { 
-                  backgroundColor: colors.selectedCategory,
-                  opacity: !name.trim() || loading ? 0.5 : 1 
-                }
-              ]}
-            >
-              <Text style={styles.saveButtonLargeText}>
-                {loading ? 'Saving...' : 'Save Contact'}
-              </Text>
-            </TouchableOpacity>
+            {/* Save Button */}
+            <View style={[styles.saveButtonContainer, { backgroundColor: colors.background }]}>
+              <TouchableOpacity 
+                onPress={handleSave}
+                disabled={!name.trim() || loading}
+                style={[
+                  styles.saveButtonLarge,
+                  { 
+                    backgroundColor: colors.selectedCategory,
+                    opacity: !name.trim() || loading ? 0.5 : 1 
+                  }
+                ]}
+              >
+                <Text style={styles.saveButtonLargeText}>
+                  {loading ? 'Saving...' : 'Save Contact'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

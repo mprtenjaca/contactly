@@ -495,11 +495,11 @@ export const deleteActivity = async (activityId: string, userId: string) => {
 export const saveUserToLocal = async (user: User, isNewUser: boolean = false) => {
   try {
     console.log('Saving user to local DB:', user);
-    const database = await getDb();
+  const database = await getDb();
     await initDatabase();
 
     // Save user to SQLite
-    await database.runAsync(
+  await database.runAsync(
       `INSERT OR REPLACE INTO users 
        (id, email, first_name, last_name, updated_at) 
        VALUES (?, ?, ?, ?, ?);`,
@@ -510,28 +510,28 @@ export const saveUserToLocal = async (user: User, isNewUser: boolean = false) =>
         user.lastName || '',
         new Date().toISOString()
       ]
-    );
+  );
 
     // If this is a new user, add default categories
     if (isNewUser) {
       console.log('Adding default categories for new user:', user.id);
       
-      const defaultCategories = [
-        { name: 'Family', color: '#FF6B6B' },
-        { name: 'Work', color: '#4ECDC4' },
-        { name: 'Friends', color: '#45B7D1' },
-        { name: 'Clients', color: '#96CEB4' }
-      ];
+    const defaultCategories = [
+      { name: 'Family', color: '#FF6B6B' },
+      { name: 'Work', color: '#4ECDC4' },
+      { name: 'Friends', color: '#45B7D1' },
+      { name: 'Clients', color: '#96CEB4' }
+    ];
+
+    const now = Date.now();
       
-      const now = Date.now();
-      
-      for (const category of defaultCategories) {
+    for (const category of defaultCategories) {
         const categoryId = `cat_${now}_${category.name.toLowerCase()}`;
-        await database.runAsync(`
-          INSERT OR IGNORE INTO categories (id, name, color, userId, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, [categoryId, category.name, category.color, user.id, now, now]);
-      }
+      await database.runAsync(`
+        INSERT OR IGNORE INTO categories (id, name, color, userId, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [categoryId, category.name, category.color, user.id, now, now]);
+    }
       
       console.log('Default categories added successfully');
     }
