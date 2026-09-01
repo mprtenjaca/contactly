@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList, Alert, Vibration, RefreshControl, Platform, TextInput, ScrollView, Modal, Share, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList, Alert, Vibration, RefreshControl, Platform, TextInput, ScrollView, Modal, Share } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,7 @@ import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import * as Haptics from 'expo-haptics';
 import * as Calendar from 'expo-calendar';
 import CalendarView from '../components/CalendarView';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const ACTIVITY_TYPES: ActivityType[] = [

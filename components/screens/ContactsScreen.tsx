@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   SectionList,
+  type SectionListData,
   ScrollView,
   PanResponder,
   SectionList as RNSectionList,
@@ -331,7 +332,7 @@ export default function ContactsScreen() {
       }));
   };
 
-  const renderSectionHeader = ({ section }: { section: { title: string; data: Contact[] } }) => (
+  const renderSectionHeader = ({ section }: { section: SectionListData<Contact> & { title?: string } }) => (
     <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
       <Text style={[styles.sectionHeaderText, { color: colors.selectedCategory }]}>
         {section.title}

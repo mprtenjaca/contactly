@@ -31,7 +31,7 @@ export default function EditProfileModal({
   initialFirstName,
   initialLastName,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -71,10 +71,10 @@ export default function EditProfileModal({
     },
     modalContent: {
       width: width - 40,
-      backgroundColor: colors.theme === 'dark' ? colors.categoryBg : colors.background,
+      backgroundColor: theme === 'dark' ? colors.categoryBg : colors.background,
       borderRadius: 16,
       padding: 24,
-      shadowColor: colors.theme === 'dark' ? '#fff' : 'gray',
+      shadowColor: theme === 'dark' ? '#fff' : 'gray',
       shadowOffset: {
         width: 0,
         height: 4,
@@ -114,14 +114,14 @@ export default function EditProfileModal({
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.theme === 'dark' ? 'rgba(255,59,48,0.2)' : 'rgba(255,59,48,0.1)',
+      backgroundColor: theme === 'dark' ? 'rgba(255,59,48,0.2)' : 'rgba(255,59,48,0.1)',
       borderWidth: 1,
-      borderColor: colors.theme === 'dark' ? '#fff' : colors.error,
+      borderColor: theme === 'dark' ? '#fff' : colors.error,
     },
     cancelButtonText: {
       fontSize: 16,
       fontWeight: '600',
-      color: colors.theme === 'dark' ? '#fff' : colors.error,
+      color: theme === 'dark' ? '#fff' : colors.error,
     },
     saveButton: {
       flex: 1,

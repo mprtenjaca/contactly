@@ -3,16 +3,22 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
-    "typeRoots": ["./types"],
+    "typeRoots": ["./node_modules/@types", "./types"],
     "types": ["node"]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "types/env.d.ts"
-, "services/NotificationService.ts"  ]
+    "types/env.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "app-example",
+    "android",
+    "ios"
+  ]
 }

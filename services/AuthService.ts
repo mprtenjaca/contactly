@@ -6,11 +6,6 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
 import { makeRedirectUri } from 'expo-auth-session';
-import {
-  GoogleSignin,
-  GoogleSigninButton,
-  statusCodes,
-} from '@react-native-google-signin/google-signin'
 import { saveUserToLocal } from './DatabaseService';
 
 

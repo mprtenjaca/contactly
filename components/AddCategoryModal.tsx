@@ -34,7 +34,7 @@ const CATEGORY_COLORS = [
 ];
 
 export default function AddCategoryModal({ visible, onClose, onSave }: Props) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const [categoryName, setCategoryName] = useState('');
   const [selectedColor, setSelectedColor] = useState(CATEGORY_COLORS[0].value);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -107,7 +107,7 @@ export default function AddCategoryModal({ visible, onClose, onSave }: Props) {
 
                       {showColorPicker && (
                         <View style={[styles.colorPickerPopup, { 
-                          backgroundColor: colors.theme === 'dark' ? colors.searchBar : colors.background,
+                          backgroundColor: theme === 'dark' ? colors.searchBar : colors.background,
                           borderColor: colors.separator,
                         }]}>
                           <View style={styles.colorGrid}>
@@ -118,7 +118,7 @@ export default function AddCategoryModal({ visible, onClose, onSave }: Props) {
                                   styles.colorOption,
                                   { 
                                     borderColor: selectedColor === color.value ? color.value : 'transparent',
-                                    backgroundColor: colors.theme === 'dark' ? colors.background : 'transparent',
+                                    backgroundColor: theme === 'dark' ? colors.background : 'transparent',
                                   }
                                 ]}
                                 onPress={() => {

@@ -138,7 +138,7 @@ export const initDatabase = async () => {
     ];
 
     // Insert default categories for each user
-    const users = await database.getAllAsync('SELECT id FROM users');
+    const users = await database.getAllAsync<{ id: string }>('SELECT id FROM users');
     if (users && Array.isArray(users)) {
       for (const user of users) {
         const now = Date.now();
@@ -194,7 +194,14 @@ export const getContact = async (id: string, userId: string): Promise<Contact | 
     const tableInfo = await database.getAllAsync("PRAGMA table_info(contacts);");
     const hasEmailColumn = tableInfo.some((col: any) => col.name === 'email');
     
-    const result = await database.getFirstAsync(
+    const result = await database.getFirstAsync<{
+      id: string;
+      name: string;
+      phoneNumber: string | null;
+      category: string | null;
+      notes: string | null;
+      email: string | null;
+    }>(
       `SELECT id, name, phoneNumber, category, notes${hasEmailColumn ? ', email' : ', "" as email'}
        FROM contacts WHERE id = ? AND user_id = ? LIMIT 1;`,
       [id, userId]
@@ -546,7 +553,12 @@ export const saveUserToLocal = async (user: User, isNewUser: boolean = false) =>
 
 export const getLocalUser = async (userId: string): Promise<User | null> => {
   const database = await getDb();
-  const result = await database.getFirstAsync(
+  const result = await database.getFirstAsync<{
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+  }>(
     'SELECT * FROM users WHERE id = ?;',
     [userId]
   );

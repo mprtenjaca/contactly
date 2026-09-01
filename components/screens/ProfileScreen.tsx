@@ -33,7 +33,7 @@ import {
 } from '../../services/DatabaseService';
 import * as SecureStore from 'expo-secure-store';
 import * as Contacts from 'expo-contacts';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Activity } from '@/services/ActivityService';
 import * as DocumentPicker from 'expo-document-picker';
@@ -819,7 +819,7 @@ export default function ProfileScreen() {
           },
           {
             text: 'Restore',
-            onPress: async (code) => {
+            onPress: async (code?: string) => {
               if (!code) return;
 
               // Show loading alert

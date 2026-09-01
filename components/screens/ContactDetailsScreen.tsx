@@ -369,7 +369,7 @@ export default function ContactDetailsScreen({ contact }: { contact: Contact }) 
   } | null>(null);
   const [showQuickLog, setShowQuickLog] = useState(false);
   const appState = useRef(AppState.currentState);
-  const actionTimeout = useRef<NodeJS.Timeout>();
+  const actionTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
   const [quickLogVisible, setQuickLogVisible] = useState(false);
   const [quickLogNotes, setQuickLogNotes] = useState('');
   const quickLogAnimation = useRef(new Animated.Value(0)).current;

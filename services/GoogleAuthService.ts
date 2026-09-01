@@ -45,10 +45,7 @@ export const signInWithGoogle = async (promptAsync: () => Promise<any>) => {
 };
 
 export const signOutFromGoogle = async () => {
-  try {
-    await GoogleSignin.signOut();
-  } catch (error) {
-    console.error('Google Sign-Out Error:', error);
-    throw error;
-  }
-}; 
+  // expo-auth-session keeps no persistent native session to clear, unlike the
+  // native @react-native-google-signin module. Sign-out is handled by clearing
+  // the Supabase session in AuthService; nothing to revoke here.
+};

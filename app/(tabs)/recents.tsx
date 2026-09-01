@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration, Platform, TextInput, ScrollView, Modal, SafeAreaView } from 'react-native'; 
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Alert, Vibration, Platform, TextInput, ScrollView, Modal } from 'react-native'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';

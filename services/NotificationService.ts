@@ -33,6 +33,7 @@ const scheduleNotification = async (
         sound: "default",
       },
       trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: trigger,
         channelId: 'reminders',
       },
@@ -156,7 +157,8 @@ export const initializeNotifications = async () => {
     // Set up notification handlers
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
       }),
@@ -243,8 +245,8 @@ export const setupNotificationHandlers = () => {
   );
 
   return () => {
-    Notifications.removeNotificationSubscription(notificationListener);
-    Notifications.removeNotificationSubscription(responseListener);
+    notificationListener.remove();
+    responseListener.remove();
   };
 };
 
@@ -341,6 +343,7 @@ export const scheduleActivityNotification = async ({
           sound: "default",
         },
         trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: notificationDate,
         },
       });
@@ -415,6 +418,7 @@ export const scheduleNotificationsForActivity = async (activity: Activity) => {
             },
           },
           trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: notificationTime,
             channelId: 'reminders',
           },

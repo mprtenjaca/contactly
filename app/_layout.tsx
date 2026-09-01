@@ -17,7 +17,8 @@ import { isBiometricEnabled, authenticateBiometric } from '../services/Biometric
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
