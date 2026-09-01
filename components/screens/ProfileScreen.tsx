@@ -44,6 +44,22 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../context/AuthContext';
 import { isBiometricAvailable, isBiometricEnabled, setBiometricEnabled, authenticateBiometric } from '../../services/BiometricService';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Crypto from 'expo-crypto';
+
+// Backup codes gate a full export of the user's contacts, so they are drawn
+// from the platform CSPRNG rather than Math.random(). Ambiguous glyphs
+// (0/O, 1/I) are left out because users read these codes aloud.
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_LENGTH = 10;
+
+const createSecureBackupCode = (): string => {
+  const bytes = Crypto.getRandomBytes(CODE_LENGTH);
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  }
+  return code;
+};
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'es', name: 'Español', flag: '🇪🇸' },
@@ -663,8 +679,9 @@ export default function ProfileScreen() {
         return;
       }
 
-      // Generate a temporary access code
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      // Generate a temporary access code. Math.random() is not a CSPRNG:
+      // backup codes unlock a full contact export, so they need real entropy.
+      const code = createSecureBackupCode();
       
       // Store the code with backup reference
       await supabase
@@ -681,7 +698,7 @@ export default function ProfileScreen() {
         [
           {
             text: 'Copy Code',
-            onPress: () => Clipboard.setString(code)
+            onPress: () => { Clipboard.setStringAsync(code); }
           },
           { text: 'OK' }
         ]

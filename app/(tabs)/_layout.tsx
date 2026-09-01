@@ -1,11 +1,20 @@
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 export default function TabsLayout() {
   const { colors, theme } = useTheme();
+  const { session } = useAuth();
+
+  // Guard the whole tab group rather than relying on the entry redirect in
+  // app/index.tsx: a deep link into contactly://(tabs)/... or a stale back
+  // stack after sign-out would otherwise render real contact data.
+  if (!session) {
+    return <Redirect href="/sign-in" />;
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>

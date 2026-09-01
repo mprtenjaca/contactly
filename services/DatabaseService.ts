@@ -646,7 +646,7 @@ export const updateContact = async (contact: {
       `UPDATE contacts 
        SET name = ?, phoneNumber = ?, email = ?, notes = ?, category = ? 
        WHERE id = ? AND user_id = ?`,
-      [name, JSON.stringify(phoneNumbers), email || null, notes || null, category || null, id, userId]
+      [name, phoneNumbers?.[0]?.number || '', email || null, notes || null, category || null, id, userId]
     );
 
     return { ...contact };

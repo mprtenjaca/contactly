@@ -1,7 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
-import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
+import { supabase } from './AuthService';
 
 interface PendingSync {
   id: string;
@@ -15,10 +14,14 @@ class OfflineManager {
   private isOnline: boolean = true;
   private pendingSyncs: PendingSync[] = [];
   private listeners: Set<(isOnline: boolean) => void> = new Set();
+  private isSyncing = false;
+  private loaded: Promise<void>;
 
   private constructor() {
     this.setupNetworkListener();
-    this.loadPendingSyncs();
+    // Held so callers that queue work in the first tick do not have their
+    // entry overwritten when the stored queue finishes loading.
+    this.loaded = this.loadPendingSyncs();
   }
 
   static getInstance() {
@@ -84,39 +87,44 @@ class OfflineManager {
   }
 
   async syncPendingChanges() {
-    if (!this.isOnline || this.pendingSyncs.length === 0) return;
+    await this.loaded;
+    // A connectivity flap can fire this while a previous run is mid-flight; two
+    // runs over the same queue snapshot would re-apply the same changes and let
+    // the slower one write back a stale queue, resurrecting synced items.
+    if (this.isSyncing || !this.isOnline || this.pendingSyncs.length === 0) return;
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-      },
-    });
+    this.isSyncing = true;
+    try {
+      for (const sync of [...this.pendingSyncs]) {
+        try {
+          switch (sync.type) {
+            case 'UPDATE_PROFILE': {
+              // supabase-js resolves with { error } rather than throwing, so the
+              // result must be inspected or a failed sync is silently dropped.
+              const { error } = await supabase
+                .from('profiles')
+                .update({
+                  first_name: sync.data.firstName,
+                  last_name: sync.data.lastName,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', sync.data.userId);
+              if (error) throw error;
+              break;
+            }
+            // Add other sync types here
+          }
 
-    for (const sync of [...this.pendingSyncs]) {
-      try {
-        switch (sync.type) {
-          case 'UPDATE_PROFILE':
-            await supabase
-              .from('profiles')
-              .update({
-                first_name: sync.data.firstName,
-                last_name: sync.data.lastName,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', sync.data.userId);
-            break;
-          // Add other sync types here
+          // Drop the item only once the write actually succeeded.
+          this.pendingSyncs = this.pendingSyncs.filter(s => s.id !== sync.id);
+          await this.savePendingSyncs();
+        } catch (error) {
+          // Leave it queued so the next sync retries it.
+          console.error('Error syncing change:', error);
         }
-
-        // Remove synced item
-        this.pendingSyncs = this.pendingSyncs.filter(s => s.id !== sync.id);
-        await this.savePendingSyncs();
-      } catch (error) {
-        console.error('Error syncing change:', error);
       }
+    } finally {
+      this.isSyncing = false;
     }
   }
 

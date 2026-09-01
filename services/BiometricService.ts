@@ -1,6 +1,8 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
+// Kept in SecureStore, not AsyncStorage: AsyncStorage is plain text on disk,
+// so anyone with filesystem access could flip this flag off and skip the lock.
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
 
 export async function isBiometricAvailable(): Promise<boolean> {
@@ -27,7 +29,7 @@ export async function authenticateBiometric(): Promise<boolean> {
 
 export async function isBiometricEnabled(): Promise<boolean> {
   try {
-    const value = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
+    const value = await SecureStore.getItemAsync(BIOMETRIC_ENABLED_KEY);
     return value === 'true';
   } catch (error) {
     console.error('Error reading biometric setting:', error);
@@ -37,7 +39,7 @@ export async function isBiometricEnabled(): Promise<boolean> {
 
 export async function setBiometricEnabled(enabled: boolean): Promise<void> {
   try {
-    await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, enabled.toString());
+    await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, enabled.toString());
   } catch (error) {
     console.error('Error saving biometric setting:', error);
   }

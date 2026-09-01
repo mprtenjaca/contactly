@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from "expo-router";
 import { ThemeProvider } from '../context/ThemeContext';
 import { AuthProvider } from '../context/AuthContext';
@@ -26,33 +26,29 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const router = useRouter();
+  const [biometricChecked, setBiometricChecked] = useState(false);
 
   useEffect(() => {
     initializeNotifications();
-    // initDatabase().catch(error => {
-    //   console.error('Failed to initialize database:', error);
-    // });
-
+    let cancelled = false;
     const checkBiometric = async () => {
-      const enabled = await isBiometricEnabled();
-      if (enabled) {
+      try {
+        const enabled = await isBiometricEnabled();
+        if (!enabled) return;
+
         const authenticated = await authenticateBiometric();
+        if (cancelled) return;
         if (!authenticated) {
-          // If biometric authentication fails, redirect to sign-in
           router.replace('/sign-in');
         }
+      } finally {
+        // Reveal the app only once the biometric prompt has resolved, so the
+        // contact list is never on screen behind an unanswered prompt.
+        if (!cancelled) setBiometricChecked(true);
       }
     };
 
     checkBiometric();
-
-    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const phoneNumber = response.notification.request.content.data?.phoneNumber;
-      if (phoneNumber) {
-        // You could add functionality to directly call the number here
-        console.log('Notification tapped, phone number:', phoneNumber);
-      }
-    });
 
     // Set up notification response handling
     const responseListener = Notifications.addNotificationResponseReceivedListener(
@@ -79,10 +75,18 @@ export default function RootLayout() {
     restoreSession().catch(console.error);
 
     return () => {
-      subscription.remove();
+      cancelled = true;
       responseListener.remove();
     };
   }, [router]);
+
+  if (!biometricChecked) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   return (
     <AuthProvider>
