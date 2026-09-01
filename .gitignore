@@ -57,3 +57,9 @@ app-example
 .env
 .env.*
 !.env.example
+
+# Claude Code (solo mode — personal context, not shared)
+CLAUDE.md
+
+# Private notes
+docs/notes/
